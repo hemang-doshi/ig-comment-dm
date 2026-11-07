@@ -21,3 +21,9 @@ migrations_dir = "migrations"
 # plan's five cron triggers per account.
 [triggers]
 crons = ["0 3 * * *", "* * * * *"]
+
+# Meta Unified login (apps created since late Oct 2026). Public, not a secret:
+# the Facebook Login for Business configuration id from Use cases → Instagram API
+# → API setup with Unified login. Remove it to use classic Instagram Login.
+[vars]
+META_LOGIN_CONFIG_ID = "YOUR_LOGIN_CONFIG_ID"

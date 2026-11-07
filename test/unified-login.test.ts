@@ -27,7 +27,7 @@ describe('Unified login (META_LOGIN_CONFIG_ID set)', () => {
   it('sends people to the Facebook Login for Business dialog with config_id and no scope', () => {
     configureMeta({ META_LOGIN_CONFIG_ID: 'cfg1' });
     const u = new URL(authorizeUrl({ clientId: 'app1', redirectUri: 'https://x.dev/connect/callback', state: 's', forceReauth: false }));
-    expect(u.origin + u.pathname).toMatch(/^https:\/\/www\.facebook\.com\/v\d+\.\d+\/dialog\/oauth$/);
+    expect(u.origin + u.pathname).toBe('https://www.facebook.com/dialog/oauth');
     expect(u.searchParams.get('config_id')).toBe('cfg1');
     expect(u.searchParams.get('override_default_response_type')).toBe('true');
     expect(u.searchParams.get('response_type')).toBe('code');

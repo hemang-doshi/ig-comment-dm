@@ -545,14 +545,16 @@ export function authorizeUrl(opts: {
 }): string {
   if (isUnifiedLogin()) {
     // Facebook Login for Business with a configuration: config_id replaces scope.
-    const fb = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);
+    // Same parameters as the Login URL Meta's dashboard generates for the configuration.
+    const fb = new URL('https://www.facebook.com/dialog/oauth');
     fb.searchParams.set('client_id', opts.clientId);
     fb.searchParams.set('redirect_uri', opts.redirectUri);
     fb.searchParams.set('config_id', unifiedConfigId);
     fb.searchParams.set('response_type', 'code');
     fb.searchParams.set('override_default_response_type', 'true');
     fb.searchParams.set('state', opts.state);
-    if (opts.forceReauth) fb.searchParams.set('auth_type', 'reauthenticate');
+    // Lets the person choose Instagram or Facebook to log in with.
+    fb.searchParams.set('prompt', 'login');
     return fb.toString();
   }
   const url = new URL(OAUTH_AUTHORIZE);
