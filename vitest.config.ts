@@ -35,6 +35,9 @@ const BINDINGS: Record<string, string> = {
   SESSION_SIGNING_KEY: key32(2),
   ADMIN_URL_SECRET: 'admin'.padEnd(32, '0'),
   PUBLIC_BASE_URL: 'https://ig-comment-dm.example.workers.dev',
+  // wrangler.toml sets this for the live app; the suite tests classic Instagram
+  // Login, and test/unified-login.test.ts covers Unified login directly.
+  META_LOGIN_CONFIG_ID: '',
 };
 
 /**
