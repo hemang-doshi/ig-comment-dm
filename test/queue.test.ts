@@ -231,7 +231,9 @@ describe('sending from the queue', () => {
     // The send that threw may have gone out, so it waits for its lease.
     expect(await sentRow(first)).toMatchObject({ dm_status: 'pending' });
     // Its account's other claims were never started: back in the queue now.
-    for (const id of [1, 2]) expect(await sentRow(`${failed}${id}`)).toMatchObject({ dm_status: 'queued' });
+    // (Newest first, so the first send was ${failed}2 and 0 and 1 wait.)
+    expect(first).toBe(`${failed}2`);
+    for (const id of [0, 1]) expect(await sentRow(`${failed}${id}`)).toMatchObject({ dm_status: 'queued' });
     for (const id of [0, 1, 2]) expect(await sentRow(`${other}${id}`)).toMatchObject({ dm_status: 'ok' });
     expect(dmTargets()).toHaveLength(4);
   });
@@ -255,7 +257,7 @@ describe('sending from the queue', () => {
     expect(await sentRow('contested')).toMatchObject({ dm_status: 'ok', attempts: 1 });
   });
 
-  it('sends the oldest comment first and fills {username} from what the queue kept', async () => {
+  it('sends the newest comment first and fills {username} from what the queue kept', async () => {
     await seedAccount();
     const ruleId = await seedRule({ dmText: 'Hi {username}!' });
     await seedQueued({ commentId: 'newer', ruleId, commentAt: NOW - 60, username: 'newer_fan' });
@@ -264,8 +266,26 @@ describe('sending from the queue', () => {
     await runMinutes();
 
     expect(meta.callsTo('POST', '/:id/messages').map((c) => c.body)).toEqual([
-      { recipient: { comment_id: 'older' }, message: { text: 'Hi older_fan!' } },
       { recipient: { comment_id: 'newer' }, message: { text: 'Hi newer_fan!' } },
+      { recipient: { comment_id: 'older' }, message: { text: 'Hi older_fan!' } },
+    ]);
+  });
+
+  it('sends comments close to Instagram’s 7-day cutoff ahead of fresh ones, oldest of them first', async () => {
+    await seedAccount();
+    const ruleId = await seedRule();
+    await seedQueued({ commentId: 'fresh', ruleId, commentAt: NOW - 60 });
+    await seedQueued({ commentId: 'six-and-a-half-days', ruleId, commentAt: NOW - 6.5 * DAY });
+    await seedQueued({ commentId: 'two-days', ruleId, commentAt: NOW - 2 * DAY });
+    await seedQueued({ commentId: 'six-point-two-days', ruleId, commentAt: NOW - 6.2 * DAY });
+
+    await runMinutes();
+
+    expect(meta.callsTo('POST', '/:id/messages').map((c) => (c.body as { recipient: { comment_id: string } }).recipient.comment_id)).toEqual([
+      'six-and-a-half-days',
+      'six-point-two-days',
+      'fresh',
+      'two-days',
     ]);
   });
 

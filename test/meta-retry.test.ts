@@ -1,3 +1,4 @@
+import { PAUSE_SECONDS } from '../src/queue.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WEBHOOK_SEND_BUDGET_MS } from '../src/process.ts';
 import { NO_TIME_FOR_PUBLIC_REPLY_ERROR } from '../src/queue.ts';
@@ -77,8 +78,8 @@ describe('a DM or public reply gets one attempt', () => {
     meta.on('POST', '/:id/messages', { status: 429, json: { error: { message: 'Application request limit reached', code: 4 } } });
     const row = await deliverMatchingComment();
     expect(meta.callsTo('POST', '/:id/messages')).toHaveLength(1);
-    expect(row).toMatchObject({ dm_status: 'retry', attempts: 1, next_attempt_at: NOW + 60 });
-    expect(row?.error).toMatch(/^DM: \{.*Application request limit reached/);
+    expect(row).toMatchObject({ dm_status: 'queued', attempts: 0, next_attempt_at: NOW + PAUSE_SECONDS });
+    expect(row?.error).toMatch(/rate limit[\s\S]*DM: \{.*Application request limit reached/);
   });
 
   it('never retries other 4xx responses', async () => {

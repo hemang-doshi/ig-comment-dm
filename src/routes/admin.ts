@@ -594,7 +594,7 @@ function sendingCard(queue: QueueOverview[], accounts: Account[], now: number) {
     </table></div>
     <p class="muted">
       Instagram allows about 750 DMs an hour per account. This sends at most ${String(SENDS_PER_MINUTE)} a minute per
-      account, which keeps every hour under that, and the rest wait their turn, oldest comment first. Accounts with DMs
+      account, which keeps every hour under that, and the rest wait their turn, newest comment first (anything near Instagram’s 7-day limit goes ahead of the line). Accounts with DMs
       waiting share the minute’s sends, about ${String(perMinute)} each right now, so the times above are rough. A
       comment still waiting an hour before Instagram’s 7-day limit is skipped as expired.
     </p>

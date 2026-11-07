@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, it, vi } from 'vitest';
 import { readTotalsSnapshot, retryUnsureSend } from '../src/db.ts';
-import { MAX_ATTEMPTS, PAUSE_SECONDS, TOKEN_WAIT_NOTE } from '../src/queue.ts';
+import { MAX_ATTEMPTS, PAUSE_SECONDS, RATE_WAIT_NOTE, TOKEN_WAIT_NOTE } from '../src/queue.ts';
 import { type MetaReply, meta } from './support/meta.ts';
 import { FROZEN_NOW_MS, IG_USER, NOW, accountRow, seedAccount, seedQueued, seedRule, sentRow } from './support/seed.ts';
 import { MINUTE_CRON, adminPath, commentPayload, postWebhook, runScheduled, signedInAdmin } from './support/worker.ts';
@@ -41,11 +41,26 @@ describe('a DM Instagram turns down for now', () => {
     ['code 613, too many calls in an hour', refusal(400, 613)],
     ['code 80002, Instagram’s business-use-case limit', refusal(400, 80002)],
     ['code 80006, Messenger’s business-use-case limit', refusal(400, 80006)],
-  ])('waits a minute and holds the account for 15 after %s', async (_, answer) => {
+  ])('holds the account for 15 minutes after %s, without using one of the comment’s tries', async (_, answer) => {
     const row = await queuedAndDrained(answer);
     expect(dmCalls()).toHaveLength(1);
-    expect(row).toMatchObject({ dm_status: 'retry', attempts: 1, next_attempt_at: NOW + 60 });
+    expect(row).toMatchObject({ dm_status: 'queued', attempts: 0, next_attempt_at: NOW + PAUSE_SECONDS });
+    expect(row?.error).toContain(RATE_WAIT_NOTE);
     expect(await pausedUntil()).toBe(NOW + PAUSE_SECONDS);
+  });
+
+  it('never gives up on a comment because of rate limits alone', async () => {
+    await queuedAndDrained(refusal(400, 4));
+    for (let i = 1; i <= 6; i++) {
+      at(i * PAUSE_SECONDS);
+      await runScheduled(MINUTE_CRON);
+    }
+    expect(dmCalls()).toHaveLength(7);
+    expect(await sentRow('c1')).toMatchObject({ dm_status: 'queued', attempts: 0 });
+    meta.on('POST', '/:id/messages', { json: { recipient_id: '1', message_id: 'm' } });
+    at(7 * PAUSE_SECONDS);
+    await runScheduled(MINUTE_CRON);
+    expect(await sentRow('c1')).toMatchObject({ dm_status: 'ok', attempts: 1 });
   });
 
   it('tries Instagram’s temporary error again after 1, 5 and 20 minutes, then gives up on the fourth', async () => {
@@ -151,10 +166,11 @@ describe('a DM whose token stopped working', () => {
     await runScheduled(MINUTE_CRON);
 
     expect(dmCalls()).toHaveLength(1);
-    const row = await sentRow('c1');
-    expect(row).toMatchObject({ dm_status: 'queued', attempts: 0, next_attempt_at: NOW - 600 });
+    // Newest comment goes first.
+    const row = await sentRow('c2');
+    expect(row).toMatchObject({ dm_status: 'queued', attempts: 0, next_attempt_at: NOW - 300 });
     expect(row?.error).toContain(TOKEN_WAIT_NOTE);
-    expect(await sentRow('c2')).toMatchObject({ dm_status: 'queued' });
+    expect(await sentRow('c1')).toMatchObject({ dm_status: 'queued' });
     expect(await accountRow()).toMatchObject({ needs_reconnect: 1 });
 
     at(2 * 60);
@@ -208,13 +224,17 @@ describe('a DM Instagram never confirmed', () => {
     expect(await sentRow('c1')).toMatchObject({ dm_status: 'ok', reply_status: 'ok', attempts: 1 });
   });
 
-  it('gets four fresh tries from Send again, so one rate limit doesn’t end it', async () => {
+  it('gets four fresh tries from Send again, and a rate limit doesn’t use one', async () => {
     await seedAccount();
     const ruleId = await seedRule();
     await seedQueued({ commentId: 'c1', ruleId });
     await env.DB.prepare("UPDATE sent SET dm_status = 'unsure', attempts = 4, next_attempt_at = NULL").run();
     expect(await retryUnsureSend(env.DB, 'c1', NOW)).toBe(true);
     meta.on('POST', '/:id/messages', refusal(429, 4));
+    await runScheduled(MINUTE_CRON);
+    expect(await sentRow('c1')).toMatchObject({ dm_status: 'queued', attempts: 0 });
+    meta.on('POST', '/:id/messages', refusal(400, 2));
+    at(PAUSE_SECONDS);
     await runScheduled(MINUTE_CRON);
     expect(await sentRow('c1')).toMatchObject({ dm_status: 'retry', attempts: 1 });
     const text = (await (await signedInAdmin()).get(adminPath('/'))).text;
@@ -298,11 +318,11 @@ describe('Home', () => {
     const text = (await (await signedInAdmin()).get(adminPath('/'))).text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
     expect(text).toContain('Sending');
-    expect(text).toContain('@creator 19 queued, 1 to try again. Oldest comment 31 minutes old.');
-    expect(text).toContain('13 DMs');
+    expect(text).toContain('@creator 20 queued, 0 to try again. Oldest comment 31 minutes old.');
+    expect(text).toContain('12 DMs');
     expect(text).toContain('about 12 each right now');
     expect(text).toMatch(/Instagram asked @creator to slow down, so its DMs wait until 2026-10-01 12:16 UTC/);
-    expect(text).toMatch(/Retrying .*Instagram turned it down for now\. Try 2 of 4 at 2026-10-01 12:02 UTC\./);
+    expect(text).toContain('Waiting out an Instagram rate limit');
   });
 
   it('labels a comment that waited too long as expired', async () => {

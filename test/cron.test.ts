@@ -366,11 +366,11 @@ describe('the comment poll, every fifth minute', () => {
 
     await runScheduled(POLL);
 
-    expect(dmTargets()).toEqual(['c1']);
+    expect(dmTargets()).toEqual(['c3']);
     expect((await sentRows()).map((r) => [r.comment_id, r.dm_status])).toEqual([
-      ['c1', 'ok'],
+      ['c1', 'queued'],
       ['c2', 'queued'],
-      ['c3', 'queued'],
+      ['c3', 'ok'],
     ]);
     expect(await systemValue('last_poll_ok_at')).not.toBeNull();
 
@@ -379,7 +379,7 @@ describe('the comment poll, every fifth minute', () => {
     vi.setSystemTime(FROZEN_NOW_MS + 60 * 1000);
     await runScheduled(POLL);
 
-    expect(dmTargets()).toEqual(['c2', 'c3']);
+    expect(dmTargets()).toEqual(['c2', 'c1']);
     expect(meta.callsTo('GET', '/:id/comments')).toEqual([]);
   });
 

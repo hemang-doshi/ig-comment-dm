@@ -63,6 +63,7 @@ export const EXPIRED_ERROR =
   'Expired: the DM was still waiting its turn when the comment neared Instagram’s 7-day limit for private replies.';
 export const LEASE_ERROR =
   "DM: the Worker stopped before this send finished, so it may have been delivered. It wasn't sent again, so it can't arrive twice.";
+export const RATE_WAIT_NOTE = 'Waiting out an Instagram rate limit: this isn’t counted against the comment’s tries.';
 export const TOKEN_WAIT_NOTE = 'Waiting for Instagram to be reconnected: the access token stopped working.';
 export const RULE_DELETED_ERROR = 'Skipped: the rule was deleted before its DM went out.';
 export const RULE_OFF_ERROR = 'Skipped: the rule was turned off before its DM went out.';
@@ -273,7 +274,24 @@ async function deliver(db: D1Database, token: string, row: ClaimedSend, deadline
       await db.batch([flagNeedsReconnectStatement(db, row.ig_user_id), holdSendsStatement(db, row.ig_user_id, at + PAUSE_SECONDS, 'token')]);
       return { called: true, stop: true };
     }
-    if ((refusal === 'rate' || refusal === 'transient') && tries < MAX_ATTEMPTS) {
+    if (refusal === 'rate') {
+      // A rate limit says the app or account is busy, not that this comment
+      // can't be answered. It isn't counted as a try, so a long cap (Meta's
+      // app-wide hourly limit) can't use up a comment's attempts and give up
+      // on someone who should still get their DM. It waits out the pause and
+      // the queue's 7-day expiry still applies.
+      await recordSend(db, row.comment_id, {
+        dm_status: row.attempts > 0 ? 'retry' : 'queued',
+        reply_status: null,
+        error: `${RATE_WAIT_NOTE}\n${sendError('DM', dm)}`,
+        attempted: false,
+        next_attempt_at: at + PAUSE_SECONDS,
+        now: at,
+      });
+      await holdSendsStatement(db, row.ig_user_id, at + PAUSE_SECONDS, 'rate').run();
+      return { called: true, stop: true };
+    }
+    if (refusal === 'transient' && tries < MAX_ATTEMPTS) {
       await recordSend(db, row.comment_id, {
         dm_status: 'retry',
         reply_status: null,
@@ -282,8 +300,7 @@ async function deliver(db: D1Database, token: string, row: ClaimedSend, deadline
         next_attempt_at: at + RETRY_BACKOFF_SECONDS[tries - 1]!,
         now: at,
       });
-      if (refusal === 'rate') await holdSendsStatement(db, row.ig_user_id, at + PAUSE_SECONDS, 'rate').run();
-      return { called: true, stop: refusal === 'rate' };
+      return { called: true, stop: false };
     }
     gaveUp = refusal !== 'final';
   }
@@ -357,7 +374,7 @@ async function replyForOtherRules(db: D1Database, row: ClaimedSend, token: strin
 /**
  * The cron's work each minute: give up on sends whose Worker was stopped,
  * skip queued sends too close to Instagram's 7-day limit, then send what's
- * due, oldest comment first, within each account's slots for the minute,
+ * due (newest comment first, near-expiry ones ahead), within each account's slots for the minute,
  * `subrequests`, and DRAIN_BUDGET_MS.
  */
 export async function drainQueue(env: Env, subrequests: Subrequests): Promise<void> {

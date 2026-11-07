@@ -1023,7 +1023,9 @@ export async function claimDueSends(
        WHERE comment_id IN (
          SELECT comment_id FROM sent
          WHERE ig_user_id = ?3 AND ${IN_QUEUE} AND next_attempt_at <= ?2
-         ORDER BY next_attempt_at
+         ORDER BY CASE WHEN COALESCE(comment_at, next_attempt_at) < ?2 - ${URGENT_AGE_SECONDS} THEN 0 ELSE 1 END,
+                  CASE WHEN COALESCE(comment_at, next_attempt_at) < ?2 - ${URGENT_AGE_SECONDS}
+                       THEN COALESCE(comment_at, next_attempt_at) ELSE -COALESCE(comment_at, next_attempt_at) END
          LIMIT ?4
        ) AND ${IN_QUEUE}
        RETURNING comment_id, ig_user_id, rule_id, username, comment_at, attempts,
@@ -1035,7 +1037,27 @@ export async function claimDueSends(
     )
     .bind(leaseUntil, now, igUserId, limit)
     .all<ClaimedSend>();
-  return (results ?? []).sort((a, b) => (a.comment_at ?? 0) - (b.comment_at ?? 0));
+  return (results ?? []).sort(compareSendOrder(now));
+}
+
+/**
+ * Comments a day from Instagram's 7-day cutoff go first, oldest first, so
+ * none expires waiting. Everything else goes newest first: someone who just
+ * commented is watching for the DM, while a backlog from days ago can wait a
+ * few minutes more when the hourly API budget is tight.
+ */
+export const URGENT_AGE_SECONDS = 6 * 24 * 60 * 60;
+
+export function compareSendOrder(now: number) {
+  const urgent = (t: number) => t < now - URGENT_AGE_SECONDS;
+  return (a: { comment_at: number | null }, b: { comment_at: number | null }): number => {
+    const ta = a.comment_at ?? 0;
+    const tb = b.comment_at ?? 0;
+    const ua = urgent(ta);
+    const ub = urgent(tb);
+    if (ua !== ub) return ua ? -1 : 1;
+    return ua ? ta - tb : tb - ta;
+  };
 }
 
 /**
