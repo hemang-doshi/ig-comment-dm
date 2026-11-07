@@ -80,7 +80,7 @@ export async function reconcileComments(env: Env, subrequests: Subrequests): Pro
     }
     if (rules.some((r) => !r.media_id)) {
       try {
-        const recent = await listRecentMedia(token, subrequests);
+        const recent = await listRecentMedia(token, subrequests, account.ig_user_id);
         for (const item of recent.slice(0, RECENT_MEDIA_FOR_ALL_POSTS)) {
           if (!mediaIds.includes(item.id)) mediaIds.push(item.id);
         }

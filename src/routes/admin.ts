@@ -1015,7 +1015,7 @@ async function recentMediaOptions(
   for (const a of accounts) {
     try {
       const token = await decryptAesGcm(env.TOKEN_ENCRYPTION_KEY, a.token_iv, a.access_token_enc);
-      const items = await listRecentMedia(token);
+      const items = await listRecentMedia(token, undefined, a.ig_user_id);
       for (const m of items) {
         out.push({
           id: m.id,

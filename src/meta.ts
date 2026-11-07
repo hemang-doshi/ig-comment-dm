@@ -2,7 +2,28 @@ import { jitteredDelayMs, sleep } from './crypto.ts';
 import type { Subrequests } from './subrequests.ts';
 
 export const GRAPH_VERSION = 'v23.0';
-export const GRAPH = `https://graph.instagram.com/${GRAPH_VERSION}`;
+const IG_GRAPH = `https://graph.instagram.com/${GRAPH_VERSION}`;
+const FB_GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
+/**
+ * Graph host for every account call. Instagram Login apps use graph.instagram.com;
+ * apps on Meta's Unified login (every app created since late October 2026) use
+ * graph.facebook.com with a system-user token. Set per request by configureMeta().
+ */
+export let GRAPH = IG_GRAPH;
+let unifiedConfigId = '';
+
+/** Switch to Unified login when META_LOGIN_CONFIG_ID is set. Call at the start of every fetch/scheduled run. */
+export function configureMeta(env: { META_LOGIN_CONFIG_ID?: string }): void {
+  unifiedConfigId = (env.META_LOGIN_CONFIG_ID ?? '').trim();
+  GRAPH = unifiedConfigId ? FB_GRAPH : IG_GRAPH;
+}
+
+export function isUnifiedLogin(): boolean {
+  return unifiedConfigId !== '';
+}
+
+/** System-user tokens never expire; store a far-future expiry so the refresh job never picks them up. */
+export const UNIFIED_TOKEN_TTL_SECONDS = 100 * 365 * 24 * 60 * 60;
 export const OAUTH_AUTHORIZE = 'https://www.instagram.com/oauth/authorize';
 export const OAUTH_TOKEN = 'https://api.instagram.com/oauth/access_token';
 export const OAUTH_SCOPES = [
@@ -301,6 +322,24 @@ export async function exchangeCodeForShortLived(opts: {
   redirectUri: string;
   code: string;
 }): Promise<{ access_token: string; user_id?: string }> {
+  if (isUnifiedLogin()) {
+    // Facebook Login for Business: GET with query params. Returns a system-user token.
+    const url = new URL(`${FB_GRAPH}/oauth/access_token`);
+    url.searchParams.set('client_id', opts.clientId);
+    url.searchParams.set('client_secret', opts.clientSecret);
+    url.searchParams.set('redirect_uri', opts.redirectUri);
+    url.searchParams.set('code', opts.code);
+    const res = await fetchWithRetry(url.toString(), { method: 'GET' });
+    const text = await res.text();
+    let json: { access_token?: string; error?: { message?: string } };
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(`token exchange failed (${res.status})`);
+    }
+    if (!json.access_token) throw new Error(json.error?.message || 'token exchange failed');
+    return { access_token: json.access_token };
+  }
   const form = new FormData();
   form.set('client_id', opts.clientId);
   form.set('client_secret', opts.clientSecret);
@@ -377,6 +416,7 @@ export async function refreshLongLived(
 export async function fetchMe(
   token: string,
 ): Promise<{ id: string; user_id?: string; username: string }> {
+  if (isUnifiedLogin()) return fetchAssignedInstagramAccount(token);
   const url = new URL(`${GRAPH}/me`);
   url.searchParams.set('fields', 'user_id,username,id');
   const res = await fetchWithRetry(url.toString(), {
@@ -400,6 +440,33 @@ export async function fetchMe(
   };
 }
 
+/**
+ * Unified login: the system-user token is granted Instagram accounts as business
+ * assets, read from /me/assigned_instagram_accounts. Takes the first one; this
+ * deployment connects one account per login.
+ */
+async function fetchAssignedInstagramAccount(token: string): Promise<{ id: string; user_id?: string; username: string }> {
+  const url = new URL(`${FB_GRAPH}/me/assigned_instagram_accounts`);
+  url.searchParams.set('fields', 'id,username');
+  const res = await fetchWithRetry(url.toString(), {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const text = await res.text();
+  let json: { data?: Array<{ id?: string | number; username?: string }>; error?: { message?: string } };
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`could not load Instagram account (${res.status})`);
+  }
+  if (!res.ok) throw new Error(json.error?.message || 'could not load Instagram account');
+  const first = (json.data ?? []).find((a) => a.id != null);
+  if (!first) {
+    throw new Error('No Instagram account was granted. Log in again and select your Instagram account on Meta’s asset screen.');
+  }
+  return { id: String(first.id), user_id: String(first.id), username: first.username ?? String(first.id) };
+}
+
 export type IgMediaItem = {
   id: string;
   caption: string;
@@ -407,8 +474,10 @@ export type IgMediaItem = {
   kind: 'reel' | 'post';
 };
 
-export async function listRecentMedia(token: string, subrequests?: Subrequests): Promise<IgMediaItem[]> {
-  const url = new URL(`${GRAPH}/me/media`);
+export async function listRecentMedia(token: string, subrequests?: Subrequests, igUserId?: string): Promise<IgMediaItem[]> {
+  // Unified login tokens belong to a system user, not the Instagram account, so /me is wrong there.
+  const owner = isUnifiedLogin() && igUserId ? encodeURIComponent(igUserId) : 'me';
+  const url = new URL(`${GRAPH}/${owner}/media`);
   url.searchParams.set('fields', 'id,caption,permalink,media_type,media_product_type');
   url.searchParams.set('limit', '25');
   const res = await fetchWithRetry(url.toString(), {
@@ -474,6 +543,18 @@ export function authorizeUrl(opts: {
   state: string;
   forceReauth: boolean;
 }): string {
+  if (isUnifiedLogin()) {
+    // Facebook Login for Business with a configuration: config_id replaces scope.
+    const fb = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);
+    fb.searchParams.set('client_id', opts.clientId);
+    fb.searchParams.set('redirect_uri', opts.redirectUri);
+    fb.searchParams.set('config_id', unifiedConfigId);
+    fb.searchParams.set('response_type', 'code');
+    fb.searchParams.set('override_default_response_type', 'true');
+    fb.searchParams.set('state', opts.state);
+    if (opts.forceReauth) fb.searchParams.set('auth_type', 'reauthenticate');
+    return fb.toString();
+  }
   const url = new URL(OAUTH_AUTHORIZE);
   url.searchParams.set('client_id', opts.clientId);
   url.searchParams.set('redirect_uri', opts.redirectUri);

@@ -9,9 +9,14 @@ import { PNGS, installRoutes } from './routes/install.ts';
 import { legalRoutes } from './routes/legal.ts';
 import { webhookRoutes } from './routes/webhook.ts';
 import type { Env } from './types.ts';
+import { configureMeta } from './meta.ts';
 
 const app = new Hono<{ Bindings: Env }>({ strict: false });
 
+app.use('*', async (c, next) => {
+  configureMeta(c.env);
+  await next();
+});
 app.use('*', securityHeaders);
 
 app.get('/', (c) => c.text('ok'));
@@ -33,6 +38,7 @@ app.route('/a/:secret', adminRoutes);
 export default {
   fetch: app.fetch,
   async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    configureMeta(env);
     if (MINUTE_CRONS.includes(event.cron)) {
       await runMinute(env, event.scheduledTime);
       return;

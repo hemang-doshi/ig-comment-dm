@@ -9,6 +9,8 @@ export type Env = {
   ADMIN_URL_SECRET: string;
   SESSION_SIGNING_KEY: string;
   PUBLIC_BASE_URL: string;
+  /** Facebook Login for Business configuration id. Set it to use Meta's Unified login (new apps). */
+  META_LOGIN_CONFIG_ID?: string;
 };
 
 export type WebhookEvent = {

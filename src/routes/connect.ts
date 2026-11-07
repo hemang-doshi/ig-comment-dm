@@ -6,6 +6,8 @@ import {
   authorizeUrl,
   exchangeCodeForShortLived,
   exchangeLongLived,
+  isUnifiedLogin,
+  UNIFIED_TOKEN_TTL_SECONDS,
   fetchMe,
   oauthRedirectUri,
   subscribeCommentWebhooks,
@@ -58,6 +60,29 @@ connectRoutes.get('/', (c) => {
   const withSlash = `${redir}/`;
   const reconnect = c.req.query('reconnect') === '1';
   const appId = (c.env.META_APP_ID ?? '').trim();
+  if (isUnifiedLogin()) {
+    return c.html(
+      layout({
+        title: 'Connect Instagram',
+        body: html`
+          <h1>Before you continue</h1>
+          <p>
+            This app uses Meta's <b>Unified login</b>. In the Meta app open
+            <b>Use cases → Instagram API → API setup with Unified login</b>, and under <b>Redirect URL</b>
+            register both lines below. Then continue: log in, and on Meta's asset screen tick your
+            Instagram account.
+          </p>
+          <pre class="raw">${redir}
+${withSlash}</pre>
+          <p class="muted">App ID sent: <code>${appId}</code> (the App ID at the top of the Meta dashboard).</p>
+          <div class="row">
+            <a class="btn" href="${startHref(reconnect)}">I’ve saved those URLs — continue to Meta</a>
+            <a class="btn secondary" href="/a/${c.env.ADMIN_URL_SECRET}/accounts">Cancel</a>
+          </div>
+        `,
+      }),
+    );
+  }
   return c.html(
     layout({
       title: 'Connect Instagram',
@@ -174,7 +199,11 @@ connectRoutes.get('/callback', async (c) => {
       redirectUri: redir,
       code,
     });
-    const longLived = await exchangeLongLived(c.env.META_APP_SECRET, shortLived.access_token);
+    // Unified login hands back a system-user token that never expires; only
+    // Instagram Login tokens are swapped for 60-day ones.
+    const longLived = isUnifiedLogin()
+      ? { access_token: shortLived.access_token, expires_in: UNIFIED_TOKEN_TTL_SECONDS }
+      : await exchangeLongLived(c.env.META_APP_SECRET, shortLived.access_token);
     const me = await fetchMe(longLived.access_token);
     const igUserId = me.user_id || me.id || shortLived.user_id;
     if (!igUserId) throw new Error('Instagram did not return an account id');
