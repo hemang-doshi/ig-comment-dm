@@ -86,6 +86,24 @@ export function hasTimeForCall(deadline: number): boolean {
  * public reply: those go through sendOnce. With `subrequests`, each attempt
  * spends one, and none is made once they run out.
  */
+/**
+ * Meta's own rate-limit meters, logged on every call so a "request limit
+ * reached" can be traced to the exact budget. Logs only the URL path (never
+ * query strings, which can carry secrets) and the usage headers.
+ */
+function logUsage(url: string, res: Response): void {
+  const app = res.headers.get('x-app-usage');
+  const buc = res.headers.get('x-business-use-case-usage');
+  if (!app && !buc && res.ok) return;
+  let path = url;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    /* keep raw */
+  }
+  console.log(JSON.stringify({ meta_usage: { path, status: res.status, app, buc } }));
+}
+
 async function fetchWithRetry(url: string, init: RequestInit, subrequests?: Subrequests): Promise<Response> {
   let lastRes: Response | undefined;
   let lastErr: unknown;
@@ -96,6 +114,7 @@ async function fetchWithRetry(url: string, init: RequestInit, subrequests?: Subr
     tries++;
     try {
       const res = await fetch(url, { ...init, signal: AbortSignal.timeout(META_TIMEOUT_MS) });
+      logUsage(url, res);
       if (res.status === 429 || res.status >= 500) {
         lastRes = res;
         continue;
@@ -192,6 +211,7 @@ async function sendOnce(url: string, init: RequestInit, deadline?: number): Prom
   let res: Response;
   try {
     res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    logUsage(url, res);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
