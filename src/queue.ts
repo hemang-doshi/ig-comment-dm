@@ -190,6 +190,8 @@ export async function admitComment(
     comment_at: at,
     dm_status: slot ? 'pending' : 'queued',
     leaseUntil: now + SEND_LEASE_SECONDS,
+    comment_text: comment.text,
+    media_id: comment.mediaId ?? null,
   });
   if (claimed && others.length) await env.DB.batch(otherRows(false));
   if (slot && token !== null) {

@@ -22,7 +22,7 @@ export const installRoutes = new Hono<{ Bindings: Env }>();
 const MANIFEST = JSON.stringify({
   name: 'Comment to DM',
   short_name: 'Comment DM',
-  start_url: './',
+  start_url: './app',
   scope: './',
   display: 'standalone',
   background_color: BACKGROUND_COLOR,

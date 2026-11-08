@@ -904,13 +904,15 @@ export async function insertSend(
     dm_status: 'pending' | 'queued';
     now: number;
     leaseUntil: number;
+    comment_text?: string | null;
+    media_id?: string | null;
   },
 ): Promise<boolean> {
   const result = await db
     .prepare(
       `INSERT INTO sent (comment_id, ig_user_id, rule_id, commenter_id, dm_status, reply_status, error, sent_at,
-                         attempts, next_attempt_at, comment_at, username)
-       VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, 0, ?, ?, ?)
+                         attempts, next_attempt_at, comment_at, username, comment_text, media_id)
+       VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, 0, ?, ?, ?, ?, ?)
        ON CONFLICT(comment_id) DO NOTHING`,
     )
     .bind(
@@ -923,6 +925,8 @@ export async function insertSend(
       row.dm_status === 'pending' ? row.leaseUntil : row.comment_at,
       row.comment_at,
       row.username,
+      row.comment_text ? row.comment_text.slice(0, 500) : null,
+      row.media_id ?? null,
     )
     .run();
   return changedRows(result) > 0;

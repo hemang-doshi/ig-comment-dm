@@ -35,7 +35,8 @@ export const securityHeaders: MiddlewareHandler = async (c, next) => {
   c.header('X-Content-Type-Options', 'nosniff');
   c.header('X-Frame-Options', 'DENY');
   c.header('Cross-Origin-Opener-Policy', 'same-origin');
-  c.header('Content-Security-Policy', POLICY);
+  // The dashboard app sets its own, wider policy (it runs its own scripts).
+  if (!c.res.headers.has('Content-Security-Policy')) c.header('Content-Security-Policy', POLICY);
 
   // The admin panel and the OAuth callback both render account state. Neither
   // should ever sit in a shared cache or a browser's back-forward cache after

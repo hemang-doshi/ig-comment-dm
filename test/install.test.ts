@@ -85,7 +85,7 @@ describe('the web app manifest', () => {
       theme_color: '#ffffff',
     });
     const inside = `/a/${env.ADMIN_URL_SECRET}/`;
-    expect(new URL(body.start_url, url).pathname).toBe(inside);
+    expect(new URL(body.start_url, url).pathname).toBe(`${inside}app`);
     expect(new URL(body.scope, url).pathname).toBe(inside);
     for (const icon of body.icons) expect(new URL(icon.src, url).pathname.startsWith(inside)).toBe(true);
   });

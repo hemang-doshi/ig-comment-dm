@@ -3,6 +3,8 @@ import { MINUTE_CRONS, runCron, runMinute } from './cron.ts';
 import { securityHeaders } from './headers.ts';
 import { ICON_SVG } from './icons.ts';
 import { adminRoutes } from './routes/admin.ts';
+import { apiRoutes } from './routes/api.ts';
+import { appRoutes } from './routes/app.ts';
 import { connectRoutes } from './routes/connect.ts';
 import { healthRoutes } from './routes/health.ts';
 import { PNGS, installRoutes } from './routes/install.ts';
@@ -32,6 +34,8 @@ app.route('/', legalRoutes);
 app.route('/webhook', webhookRoutes);
 app.route('/connect', connectRoutes);
 // First, so its four public GETs answer before the admin login middleware.
+app.route('/a/:secret/api', apiRoutes);
+app.route('/a/:secret/app', appRoutes);
 app.route('/a/:secret', installRoutes);
 app.route('/a/:secret', adminRoutes);
 

@@ -492,13 +492,19 @@ export type IgMediaItem = {
   caption: string;
   permalink: string;
   kind: 'reel' | 'post';
+  /** Poster frame for reels and videos, the image for photos. Signed CDN URLs that expire. */
+  thumbnail?: string;
+  timestamp?: string;
+  comments?: number;
+  /** Up to 300 characters of the caption. */
+  fullCaption?: string;
 };
 
 export async function listRecentMedia(token: string, subrequests?: Subrequests, igUserId?: string): Promise<IgMediaItem[]> {
   // Unified login tokens belong to a system user, not the Instagram account, so /me is wrong there.
   const owner = isUnifiedLogin() && igUserId ? encodeURIComponent(igUserId) : 'me';
   const url = new URL(`${GRAPH}/${owner}/media`);
-  url.searchParams.set('fields', 'id,caption,permalink,media_type,media_product_type');
+  url.searchParams.set('fields', 'id,caption,permalink,media_type,media_product_type,thumbnail_url,media_url,timestamp,comments_count');
   url.searchParams.set('limit', '25');
   const res = await fetchWithRetry(url.toString(), {
     method: 'GET',
@@ -511,6 +517,11 @@ export async function listRecentMedia(token: string, subrequests?: Subrequests, 
       caption?: string;
       permalink?: string;
       media_product_type?: string;
+      media_type?: string;
+      thumbnail_url?: string;
+      media_url?: string;
+      timestamp?: string;
+      comments_count?: number;
     }>;
     error?: { message?: string };
   };
@@ -532,6 +543,10 @@ export async function listRecentMedia(token: string, subrequests?: Subrequests, 
       caption: cap.slice(0, 48) || permalink || String(row.id),
       permalink,
       kind,
+      thumbnail: row.thumbnail_url ?? (row.media_type === 'VIDEO' ? undefined : row.media_url),
+      timestamp: row.timestamp,
+      comments: row.comments_count,
+      fullCaption: cap.slice(0, 300),
     });
   }
   return items;

@@ -328,7 +328,7 @@ function loginPage(opts: { base: string; csrf: string; error?: string; lockedFor
 
 adminRoutes.get('/login', async (c) => {
   if (!(await passwordConfigured(c.env))) return c.redirect(`${c.get('adminBase')}/setup`, 302);
-  if (c.get('session').authed) return c.redirect(`${c.get('adminBase')}/`, 302);
+  if (c.get('session').authed) return c.redirect(`${c.get('adminBase')}${c.env.ASSETS ? '/app' : '/'}`, 302);
   const remaining = lockRemaining(await readThrottle(c.env.DB), nowSeconds());
   return c.html(
     loginPage({
@@ -379,7 +379,8 @@ adminRoutes.post('/login', async (c) => {
   await clearFailures(c.env.DB);
   const made = await makeSession(c.env.SESSION_SIGNING_KEY, c.get('binding'), true);
   c.header('Set-Cookie', serializeSessionCookie(made.token, c.env.PUBLIC_BASE_URL, 30 * 24 * 60 * 60));
-  return c.redirect(`${base}/`, 302);
+  // The dashboard app is the front door; the classic pages stay at `${base}/`.
+  return c.redirect(c.env.ASSETS ? `${base}/app` : `${base}/`, 302);
 });
 
 // Logout ends every session, not just this browser's: a stateless cookie

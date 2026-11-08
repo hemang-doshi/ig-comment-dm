@@ -11,6 +11,8 @@ export type Env = {
   PUBLIC_BASE_URL: string;
   /** Facebook Login for Business configuration id. Set it to use Meta's Unified login (new apps). */
   META_LOGIN_CONFIG_ID?: string;
+  /** Built dashboard app (web/dist), served under /app-static/. */
+  ASSETS?: Fetcher;
 };
 
 export type WebhookEvent = {
