@@ -135,11 +135,18 @@ type ActivityRow = {
   media_id: string | null;
 };
 
-const STATUS_GROUPS: Record<string, string[]> = {
-  sent: ['ok'],
-  waiting: ['queued', 'pending', 'retry'],
-  problem: ['failed', 'unsure'],
-  skipped: ['skipped'],
+/**
+ * "Already has a reply" means the person was answered before, usually by the
+ * old Business Suite automation, so it isn't a failure from the creator's
+ * point of view. It's grouped with skipped, not with problems.
+ */
+const ANSWERED = "(COALESCE(s.error,'') LIKE '%2534023%' OR COALESCE(s.error,'') LIKE '%already has a reply%')";
+
+const STATUS_WHERE: Record<string, string> = {
+  sent: "s.dm_status = 'ok'",
+  waiting: "s.dm_status IN ('queued','pending','retry')",
+  problem: `s.dm_status IN ('failed','unsure') AND NOT ${ANSWERED}`,
+  skipped: `(s.dm_status = 'skipped' OR (s.dm_status = 'failed' AND ${ANSWERED}))`,
 };
 
 /* -------------------------------------------------------------------- reads */
@@ -156,18 +163,21 @@ apiRoutes.get('/overview', async (c) => {
     { from: now - 30 * DAY },
     { from: 0 },
   ];
-  const [health, queues, totals, accounts, rules, events, hourly] = await Promise.all([
+  const [health, queues, totals, accounts, rules, events, problemsWeek, hourly] = await Promise.all([
     healthSnapshot(env.DB, now),
     queueOverview(env.DB, now),
     sendTotals(env.DB, spans),
     listAccounts(env.DB),
     listRules(env.DB),
     recentWebhookEvents(env.DB, 1),
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM sent s WHERE ${STATUS_WHERE.problem} AND s.sent_at >= ?`)
+      .bind(now - 7 * DAY)
+      .first<{ n: number }>(),
     env.DB.prepare(
       `SELECT (sent_at - (sent_at % 3600)) AS hour,
               COUNT(CASE WHEN dm_status = 'ok' THEN 1 END) AS sent,
-              COUNT(CASE WHEN dm_status IN ('failed','unsure') THEN 1 END) AS problems
-       FROM sent WHERE sent_at >= ? GROUP BY hour ORDER BY hour`,
+              COUNT(CASE WHEN ${STATUS_WHERE.problem} THEN 1 END) AS problems
+       FROM sent s WHERE sent_at >= ? GROUP BY hour ORDER BY hour`,
     )
       .bind(now - DAY)
       .all<{ hour: number; sent: number; problems: number }>(),
@@ -230,6 +240,7 @@ apiRoutes.get('/overview', async (c) => {
       connectedAt: a.connected_at,
     })),
     rules: { total: rules.length, active: rules.filter((r) => r.active === 1).length },
+    problemsWeek: problemsWeek?.n ?? 0,
   });
 });
 
@@ -245,11 +256,8 @@ apiRoutes.get('/activity', async (c) => {
 
   const where: string[] = [];
   const binds: (string | number)[] = [];
-  const group = STATUS_GROUPS[status];
-  if (group) {
-    where.push(`s.dm_status IN (${group.map(() => '?').join(',')})`);
-    binds.push(...group);
-  }
+  const group = STATUS_WHERE[status];
+  if (group) where.push(group);
   if (rule && /^\d+$/.test(rule)) {
     where.push('s.rule_id = ?');
     binds.push(Number(rule));
@@ -273,12 +281,12 @@ apiRoutes.get('/activity', async (c) => {
     env.DB.prepare(sql).bind(...binds, limit + 1).all<ActivityRow>(),
     queueOverview(env.DB, now),
     env.DB.prepare(
-      `SELECT COUNT(CASE WHEN dm_status = 'ok' THEN 1 END) AS sent,
-              COUNT(CASE WHEN dm_status IN ('queued','pending','retry') THEN 1 END) AS waiting,
-              COUNT(CASE WHEN dm_status IN ('failed','unsure') THEN 1 END) AS problem,
-              COUNT(CASE WHEN dm_status = 'skipped' THEN 1 END) AS skipped,
+      `SELECT COUNT(CASE WHEN ${STATUS_WHERE.sent} THEN 1 END) AS sent,
+              COUNT(CASE WHEN ${STATUS_WHERE.waiting} THEN 1 END) AS waiting,
+              COUNT(CASE WHEN ${STATUS_WHERE.problem} THEN 1 END) AS problem,
+              COUNT(CASE WHEN ${STATUS_WHERE.skipped} THEN 1 END) AS skipped,
               COUNT(*) AS all_rows
-       FROM sent`,
+       FROM sent s`,
     ).first<Record<string, number>>(),
   ]);
   const pausedUntil = queues.find((x) => x.paused_until > now)?.paused_until;
@@ -319,9 +327,9 @@ apiRoutes.get('/rules', async (c) => {
     `SELECT rule_id,
             COUNT(CASE WHEN dm_status = 'ok' THEN 1 END) AS sent,
             COUNT(CASE WHEN dm_status IN ('queued','pending','retry') THEN 1 END) AS waiting,
-            COUNT(CASE WHEN dm_status IN ('failed','unsure') THEN 1 END) AS problem,
+            COUNT(CASE WHEN ${STATUS_WHERE.problem} THEN 1 END) AS problem,
             MAX(CASE WHEN dm_status = 'ok' THEN sent_at END) AS last_sent_at
-     FROM sent WHERE rule_id IS NOT NULL GROUP BY rule_id`,
+     FROM sent s WHERE rule_id IS NOT NULL GROUP BY rule_id`,
   ).all<{ rule_id: number; sent: number; waiting: number; problem: number; last_sent_at: number | null }>();
   const byRule = new Map((stats.results ?? []).map((s) => [s.rule_id, s]));
   return c.json({

@@ -7,7 +7,7 @@
     "doctor": "node --experimental-strip-types scripts/doctor.ts",
     "update": "node --experimental-strip-types scripts/update.ts",
     "dev": "wrangler dev --port 8787",
-    "deploy": "npm run db:migrate && wrangler deploy",
+    "deploy": "npm run build:web && npm run typecheck && vitest run && npm run db:migrate && wrangler deploy",
     "db:migrate": "wrangler d1 migrations apply DB --remote",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:list": "wrangler d1 migrations list DB --remote",
@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p test",
     "selftest": "node --experimental-strip-types scripts/selftest.ts",
     "keys": "node --experimental-strip-types scripts/keys.ts",
-    "icons": "node --experimental-strip-types scripts/icons.ts"
+    "icons": "node --experimental-strip-types scripts/icons.ts",
+    "build:web": "npm --prefix web ci --no-audit --no-fund && npm --prefix web run build"
   },
   "dependencies": {
     "hono": "^4.13.13"

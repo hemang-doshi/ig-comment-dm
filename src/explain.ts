@@ -291,6 +291,7 @@ export function explainSend(s: SentLike, opts: { pausedUntil?: number; now?: num
         };
       }
       const ex = explainMetaRefusal(err.replace(/^DM:\s*/i, ''));
+      if (/2534023|already has a reply/i.test(err)) return { label: 'Answered earlier', tone: 'info', ...ex, retryable: false };
       return { label: 'Not sent', tone: 'danger', ...ex, retryable: false };
     }
   }

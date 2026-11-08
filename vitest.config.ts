@@ -38,6 +38,7 @@ const BINDINGS: Record<string, string> = {
   // wrangler.toml sets this for the live app; the suite tests classic Instagram
   // Login, and test/unified-login.test.ts covers Unified login directly.
   META_LOGIN_CONFIG_ID: '',
+  DASHBOARD: '',
 };
 
 /**

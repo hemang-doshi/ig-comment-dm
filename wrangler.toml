@@ -27,3 +27,11 @@ crons = ["0 3 * * *", "* * * * *"]
 # → API setup with Unified login. Remove it to use classic Instagram Login.
 [vars]
 META_LOGIN_CONFIG_ID = "YOUR_LOGIN_CONFIG_ID"
+# "on": logging in lands on the dashboard app (/a/<secret>/app). Anything else: the classic pages.
+DASHBOARD = "on"
+
+# The dashboard app (web/), built by `npm run build:web` into web/dist and
+# served under /app-static/. Requests for any other path reach the Worker.
+[assets]
+directory = "./web/dist"
+binding = "ASSETS"

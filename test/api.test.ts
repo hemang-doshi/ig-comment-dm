@@ -78,10 +78,12 @@ describe('the dashboard API', () => {
     expect(byId.get('answered-before')?.commentText).toBe('Guide please!');
     expect(byId.get('cant-reach')?.outcome.title).toMatch(/couldn’t deliver/);
     expect(byId.get('waiting')?.outcome.label).toBe('Queued');
-    expect(res.json.counts).toMatchObject({ problem: 2, waiting: 1 });
+    // "Already answered" isn't a failure from the creator's side: it's grouped with skipped.
+    expect(res.json.counts).toMatchObject({ problem: 1, waiting: 1, skipped: 1 });
+    expect(byId.get('answered-before')?.outcome.label).toBe('Answered earlier');
 
     const problems = await api(browser, '/activity?status=problem');
-    expect((problems.json.items as unknown[]).length).toBe(2);
+    expect((problems.json.items as Array<{ commentId: string }>).map((i) => i.commentId)).toEqual(['cant-reach']);
     const search = await api(browser, '/activity?q=a_fan');
     expect((search.json.items as unknown[]).length).toBeGreaterThan(0);
   });
@@ -158,5 +160,25 @@ describe('the dashboard API', () => {
     await postWebhook(commentPayload({ commentId: 'with-text', text: 'guide pls' }));
     const row = await env.DB.prepare('SELECT comment_text, media_id FROM sent WHERE comment_id = ?').bind('with-text').first();
     expect(row).toMatchObject({ comment_text: 'guide pls' });
+  });
+});
+
+describe('the dashboard app shell', () => {
+  it('sends someone who isn’t logged in to the login page', async () => {
+    const res = await request(adminPath('/app'));
+    expect(res.status).toBe(302);
+    expect(res.location).toContain('/login');
+    expect((await request('/a/wrong/app')).status).toBe(404);
+  });
+
+  it('serves the shell with its own script policy and the admin base written in', async () => {
+    const { browser } = await session();
+    const res = await browser.get(adminPath('/app/automations'));
+    if (res.status === 503) return; // web/ not built in this checkout
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Security-Policy')).toContain("script-src 'self'");
+    expect(res.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
+    expect(res.text).toContain(`/a/${env.ADMIN_URL_SECRET}/manifest.webmanifest`);
+    expect(res.text).not.toContain('%ADMIN_BASE%');
   });
 });
