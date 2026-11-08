@@ -536,7 +536,7 @@ async function main(): Promise<void> {
     if (!startingPoint) {
       stop({
         stop: 'Could not find any version of the official repository to compare your copy with.',
-        hint: 'Open an issue at https://github.com/CharanMN7/ig-comment-dm/issues and paste this output.',
+        hint: 'Open an issue at https://github.com/hemang-doshi/ig-comment-dm/issues and paste this output.',
       });
     }
     base = startingPoint.sha;

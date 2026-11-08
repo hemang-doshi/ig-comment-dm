@@ -15,8 +15,9 @@
  * --rotate is passed, or an earlier run stopped before it finished (see
  * UNFINISHED below).
  */
+import { spawnSync } from 'node:child_process';
 import { webcrypto } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
@@ -42,7 +43,28 @@ const WRANGLER = wranglerBin();
 // local and .wrangler/ is git-ignored, so a copy set up somewhere else, or
 // before this file existed, keeps its values as before.
 const SHOWN_ONCE = ['ADMIN_URL_SECRET', 'WEBHOOK_VERIFY_TOKEN'];
-const UNFINISHED = resolve(fileURLToPath(new URL('..', import.meta.url)), '.wrangler', 'setup-unfinished');
+const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const UNFINISHED = resolve(ROOT, '.wrangler', 'setup-unfinished');
+
+/**
+ * wrangler.toml serves the dashboard app from web/dist, and Wrangler refuses to
+ * deploy while that folder is missing, so build it first. Runs through the npm
+ * that started this script (npm_execpath), which needs no shell on Windows.
+ * Skipped when the copy has no web/ folder.
+ */
+function buildDashboard(): boolean {
+  if (!existsSync(resolve(ROOT, 'web', 'package.json'))) return true;
+  const npmCli = process.env.npm_execpath;
+  const [cmd, args] = npmCli ? [process.execPath, [npmCli, 'run', 'build:web']] : ['npm', ['run', 'build:web']];
+  const res = spawnSync(cmd, args, {
+    cwd: ROOT,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    shell: !npmCli && process.platform === 'win32',
+  });
+  if (res.status !== 0) say(indent(`${res.stdout ?? ''}${res.stderr ?? ''}`));
+  return res.status === 0;
+}
 
 function say(msg = ''): void {
   console.log(msg);
@@ -185,6 +207,11 @@ async function main(): Promise<void> {
   // writing the id back into wrangler.toml, which it skips for a commented TOML.
   say(`${DIM}  Wrangler creates the D1 database named in wrangler.toml on this first`);
   say(`  deploy, or reuses it if your account already has one by that name.${RESET}\n`);
+  if (!buildDashboard()) {
+    rl.close();
+    die('Could not build the dashboard app in web/.', 'Fix what the output above says, then run npm run setup again.');
+  }
+  ok('Built the dashboard app');
   const first = wrangler(['deploy']);
   if (first.code !== 0) {
     rl.close();
@@ -200,7 +227,7 @@ async function main(): Promise<void> {
     die(
       'The deploy succeeded but no Worker URL could be read from the output.',
       'Copy the https://…workers.dev URL printed above, then carry on from "Create the tables" in\n' +
-        'https://charanmn7.github.io/ig-comment-dm/docs/setup/#deploying-by-hand',
+        'https://hemang-doshi.github.io/ig-comment-dm/docs/setup/#deploying-by-hand',
     );
   }
   ok(`Deployed to ${BOLD}${url}${RESET}`);
@@ -220,9 +247,54 @@ async function main(): Promise<void> {
   ok(applied.length ? `Applied ${applied.join(', ')}` : 'Already up to date.');
 
   // -------------------------------------------------------- 4. Meta secrets
-  step(4, TOTAL, 'Your three values from the Meta dashboard');
+  step(4, TOTAL, 'Your values from the Meta dashboard');
   const existing = existingSecretNames();
-  const metaSecrets: Array<{ name: string; prompt: string; where: string }> = [
+
+  // Meta apps created since late October 2026 can only use Unified login
+  // (Facebook Login for Business with a configuration id). Older apps may still
+  // use Instagram Login. The two take their app id and secret from different
+  // screens, so ask which one this app is before asking for anything else.
+  let unified = existing.has('META_LOGIN_CONFIG_ID');
+  if (unified && !rotate) {
+    ok('META_LOGIN_CONFIG_ID is already set — this copy uses Unified login.');
+  } else if (!existing.has('META_APP_ID') || rotate) {
+    say(`\n  ${BOLD}Which login does your Meta app use?${RESET}`);
+    say(`  ${DIM}Apps created since late October 2026 only offer Unified login: Use cases →`);
+    say(`  Instagram API shows "API setup with Facebook login" and asks for a configuration.${RESET}`);
+    say('    1. Unified login (Facebook Login for Business) — new apps');
+    say('    2. Instagram Login — apps that still show "API setup with Instagram login"');
+    unified = (await ask('  1 or 2 [1]: ')) !== '2';
+    if (unified) {
+      say(`\n  ${BOLD}Login configuration id${RESET}`);
+      say(`  ${DIM}Facebook Login for Business → Configurations → your configuration's id. Give the`);
+      say(`  configuration instagram_basic, instagram_manage_comments and instagram_manage_messages.${RESET}`);
+      let configId = '';
+      while (!/^\d{6,}$/.test(configId)) {
+        configId = await ask('  META_LOGIN_CONFIG_ID: ');
+        if (!/^\d{6,}$/.test(configId)) warn('That should be a long number.');
+      }
+      if (!(await putSecret('META_LOGIN_CONFIG_ID', configId))) {
+        rl.close();
+        die('Could not save META_LOGIN_CONFIG_ID to Cloudflare.');
+      }
+      ok('META_LOGIN_CONFIG_ID saved to Cloudflare');
+    }
+  }
+
+  const metaSecrets: Array<{ name: string; prompt: string; where: string }> = unified
+    ? [
+        {
+          name: 'META_APP_ID',
+          prompt: 'App ID',
+          where: 'The App ID at the top of the app dashboard (also under App settings → Basic).',
+        },
+        {
+          name: 'META_APP_SECRET',
+          prompt: 'App secret',
+          where: 'App settings → Basic → App secret → Show.',
+        },
+      ]
+    : [
     {
       name: 'META_APP_ID',
       prompt: 'Instagram App ID',
@@ -242,6 +314,7 @@ async function main(): Promise<void> {
     },
   ];
 
+  const typed: Record<string, string> = {};
   for (const secret of metaSecrets) {
     if (existing.has(secret.name) && !rotate) {
       ok(`${secret.name} is already set — leaving it alone. (npm run setup -- --rotate to replace)`);
@@ -258,7 +331,17 @@ async function main(): Promise<void> {
       rl.close();
       die(`Could not save ${secret.name} to Cloudflare.`);
     }
+    typed[secret.name] = value;
     ok(`${secret.name} saved to Cloudflare`);
+  }
+  // With Unified login one App secret does both jobs, the token exchange and
+  // signing webhooks, so save it under the webhook's name too.
+  if (unified && typed.META_APP_SECRET && (!existing.has('FACEBOOK_APP_SECRET') || rotate)) {
+    if (!(await putSecret('FACEBOOK_APP_SECRET', typed.META_APP_SECRET))) {
+      rl.close();
+      die('Could not save FACEBOOK_APP_SECRET to Cloudflare.');
+    }
+    ok('FACEBOOK_APP_SECRET saved (the same App secret signs webhooks)');
   }
 
   // --------------------------------------------------- 5. generated secrets
@@ -338,14 +421,19 @@ async function main(): Promise<void> {
   say(`\n${GREEN}${BOLD}Done. Your copy is live.${RESET}\n`);
   say(`${BOLD}Paste these into the Meta dashboard.${RESET} Nothing works until you do.\n`);
 
-  say(`${BOLD}1. OAuth redirect URIs${RESET}`);
-  say(`${DIM}   Instagram → API setup with Instagram login → Business login settings.`);
-  say(`   Add both lines — Meta sometimes appends the trailing slash itself.${RESET}`);
+  if (unified) {
+    say(`${BOLD}1. Valid OAuth Redirect URIs${RESET}`);
+    say(`${DIM}   Facebook Login for Business → Settings. Add both lines.${RESET}`);
+  } else {
+    say(`${BOLD}1. OAuth redirect URIs${RESET}`);
+    say(`${DIM}   Instagram → API setup with Instagram login → Business login settings.`);
+    say(`   Add both lines — Meta sometimes appends the trailing slash itself.${RESET}`);
+  }
   say(`   ${CYAN}${url}/connect/callback${RESET}`);
   say(`   ${CYAN}${url}/connect/callback/${RESET}\n`);
 
   say(`${BOLD}2. Webhook callback URL${RESET}`);
-  say(`${DIM}   Instagram → API setup with Instagram login → Configure webhooks.`);
+  say(`${DIM}   Use cases → Instagram API → API setup with ${unified ? 'Facebook' : 'Instagram'} login → Configure webhooks.`);
   say(`   Subscribe to "comments" with Include values on.${RESET}`);
   say(`   ${CYAN}${url}/webhook${RESET}`);
   if (verifyToken) {

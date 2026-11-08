@@ -2,7 +2,7 @@
 description: What protects the admin panel, what's encrypted, what's deliberately not defended against, and how to rotate a secret. The full policy is SECURITY.md.
 ---
 
-This page summarises the threat model. The policy itself, with the full secret inventory and how to report a vulnerability, is [SECURITY.md](https://github.com/CharanMN7/ig-comment-dm/blob/master/SECURITY.md).
+This page summarises the threat model. The policy itself, with the full secret inventory and how to report a vulnerability, is [SECURITY.md](https://github.com/hemang-doshi/ig-comment-dm/blob/master/SECURITY.md).
 
 This is self-hosted software. Every deployment is a separate Worker owned by whoever deployed it. There's no hosted service, no shared database and no vendor with access to your data. Your secrets live in your Cloudflare account's secret store, and none of them are in the repository, in D1 or in any log line the Worker writes.
 
@@ -58,7 +58,7 @@ The Worker's only runtime dependency is `hono`. Pages carry a Content-Security-P
 
 ## What a leak costs
 
-`TOKEN_ENCRYPTION_KEY` and `SESSION_SIGNING_KEY` are critical: one decrypts every stored token, the other forges an admin session. A leaked `META_APP_SECRET` or `FACEBOOK_APP_SECRET` allows forged webhooks and token exchanges; reset it in Meta's dashboard immediately. A leaked `ADMIN_URL_SECRET` reveals the panel's URL. `WEBHOOK_VERIFY_TOKEN` is low impact, and `META_APP_ID` and `PUBLIC_BASE_URL` aren't secret at all. The table in [SECURITY.md](https://github.com/CharanMN7/ig-comment-dm/blob/master/SECURITY.md#secret-inventory) has each one.
+`TOKEN_ENCRYPTION_KEY` and `SESSION_SIGNING_KEY` are critical: one decrypts every stored token, the other forges an admin session. A leaked `META_APP_SECRET` or `FACEBOOK_APP_SECRET` allows forged webhooks and token exchanges; reset it in Meta's dashboard immediately. A leaked `ADMIN_URL_SECRET` reveals the panel's URL. `WEBHOOK_VERIFY_TOKEN` is low impact, and `META_APP_ID` and `PUBLIC_BASE_URL` aren't secret at all. The table in [SECURITY.md](https://github.com/hemang-doshi/ig-comment-dm/blob/master/SECURITY.md#secret-inventory) has each one.
 
 ## Rotating a secret
 
@@ -73,4 +73,4 @@ npx wrangler deploy
 
 ## Reporting a vulnerability
 
-Don't open a public issue. Use GitHub's [private vulnerability reporting](https://github.com/CharanMN7/ig-comment-dm/security/advisories/new). If that isn't available to you, [SECURITY.md](https://github.com/CharanMN7/ig-comment-dm/blob/master/SECURITY.md#reporting-a-vulnerability) has an email address. Include what you found, how to reproduce it, and what an attacker gains. Test against your own deployment, never someone else's.
+Don't open a public issue. Use GitHub's [private vulnerability reporting](https://github.com/hemang-doshi/ig-comment-dm/security/advisories/new). If that isn't available to you, [SECURITY.md](https://github.com/hemang-doshi/ig-comment-dm/blob/master/SECURITY.md#reporting-a-vulnerability) has an email address. Include what you found, how to reproduce it, and what an attacker gains. Test against your own deployment, never someone else's.

@@ -22,11 +22,11 @@ migrations_dir = "migrations"
 [triggers]
 crons = ["0 3 * * *", "* * * * *"]
 
-# Meta Unified login (apps created since late Oct 2026). Public, not a secret:
-# the Facebook Login for Business configuration id from Use cases → Instagram API
-# → API setup with Unified login. Remove it to use classic Instagram Login.
 [vars]
-META_LOGIN_CONFIG_ID = "YOUR_LOGIN_CONFIG_ID"
+# Meta Unified login (Meta apps created since late Oct 2026) is switched on by
+# the META_LOGIN_CONFIG_ID secret, not a var here, so each deployment keeps its
+# own: `npx wrangler secret put META_LOGIN_CONFIG_ID` (npm run setup asks for it).
+# Leave it unset to use classic Instagram Login.
 # "on": logging in lands on the dashboard app (/a/<secret>/app). Anything else: the classic pages.
 DASHBOARD = "on"
 

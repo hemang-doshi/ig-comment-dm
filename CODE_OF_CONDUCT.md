@@ -23,7 +23,8 @@ discussions, or commit messages.
 
 ## Reporting
 
-Email `charanxmn@gmail.com`. Reports are handled privately. You will not be asked
+Contact the maintainer, [@hemang-doshi](https://github.com/hemang-doshi), privately through the
+contact details on that GitHub profile. Reports are handled privately. You will not be asked
 to justify why something bothered you.
 
 ## Enforcement

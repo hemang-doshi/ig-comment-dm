@@ -11,7 +11,7 @@ The Meta app must be **Live** (published) for real comment webhooks; in Developm
 - Cloudflare Workers, TypeScript, ESM.
 - Hono with the default Workers export (`fetch` and `scheduled`), not `hono/vercel`. Hono runs with `{ strict: false }`, so `/a/:secret` and `/a/:secret/` both work.
 - D1 through the `DB` binding, with raw parameterised SQL (`.prepare().bind()`) and no ORM.
-- Schema in numbered [`migrations/*.sql`](https://github.com/CharanMN7/ig-comment-dm/tree/master/migrations) files, applied in order by Wrangler's tracked runner (`wrangler d1 migrations apply`), which records each one in `d1_migrations` and never runs it again. `npm run deploy` applies them before deploying.
+- Schema in numbered [`migrations/*.sql`](https://github.com/hemang-doshi/ig-comment-dm/tree/master/migrations) files, applied in order by Wrangler's tracked runner (`wrangler d1 migrations apply`), which records each one in `d1_migrations` and never runs it again. `npm run deploy` applies them before deploying.
 - Server-rendered HTML through `hono/html`. No React, no Tailwind, no bundler, no client framework, and one `<style>` block in the layout.
 - One runtime dependency, `hono`. `wrangler`, `typescript` and `@cloudflare/workers-types` are dev dependencies.
 - `nodejs_compat` is off and nothing imports `node:crypto`.
@@ -239,4 +239,4 @@ Read by `scripts/selftest.ts` only:
 - The `webhook_events` table and the comment poll.
 - The send queue: `queued` rows, leases, and the `send_budget` table.
 
-The original Phase 1 contract (schema, secrets, bindings and CLI commands as first specified) is kept in git history: [docs/phase-1.md at ace7ae9](https://github.com/CharanMN7/ig-comment-dm/blob/ace7ae9/docs/phase-1.md).
+The original Phase 1 contract (schema, secrets, bindings and CLI commands as first specified) is kept in git history: [docs/phase-1.md at ace7ae9](https://github.com/hemang-doshi/ig-comment-dm/blob/ace7ae9/docs/phase-1.md).

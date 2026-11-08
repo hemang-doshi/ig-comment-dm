@@ -37,7 +37,7 @@ the guide; don't improvise steps it doesn't have.
 If a secret does land in the chat, tell the human to rotate it. For an app secret, they
 reset it in Meta's dashboard first. Then, in their own terminal, they run
 `npx wrangler secret put <NAME>` and `npx wrangler deploy`. The docs page on
-[rotating a secret](https://charanmn7.github.io/ig-comment-dm/docs/security/#rotating-a-secret)
+[rotating a secret](https://hemang-doshi.github.io/ig-comment-dm/docs/security/#rotating-a-secret)
 has the details.
 
 ## Browser or words
@@ -51,7 +51,7 @@ instagram.com and dash.cloudflare.com one at a time, because they touch real acc
 ## 1. Check the starting point
 
 - Confirm you're in the repo root (`package.json` has `"name": "ig-comment-dm"`). If not,
-  clone `https://github.com/CharanMN7/ig-comment-dm.git` and work in it.
+  clone `https://github.com/hemang-doshi/ig-comment-dm.git` and work in it.
 - Check `node --version` is 22.13 or newer. Anything older and `npm ci` stops with
   "Unsupported engine": the human upgrades Node.js first (22 or 24 LTS).
 - Run `npm ci`.
@@ -106,7 +106,7 @@ the next run replaces both and prints the new ones.
 
 Ask them for the **Worker URL** only (`https://ig-comment-dm.<name>.workers.dev`). It's
 public. If the script stops, ask what the last lines said, without secrets, and check them
-against [Troubleshooting](https://charanmn7.github.io/ig-comment-dm/docs/troubleshooting/)
+against [Troubleshooting](https://hemang-doshi.github.io/ig-comment-dm/docs/troubleshooting/)
 and the guide's "Deploying by hand" section.
 
 Then the human opens the admin URL in their own browser and creates a password on the first
@@ -149,7 +149,7 @@ All of this happens in the human's own admin tab. Describe it; don't drive it.
    the admin page. Instagram connects whichever account that browser is logged into. If the
    wrong one connects, use a private window.
 2. **Rules → New rule**: a keyword such as `guide` and the DM to send. The
-   [Using it](https://charanmn7.github.io/ig-comment-dm/docs/using/#write-a-rule) page
+   [Using it](https://hemang-doshi.github.io/ig-comment-dm/docs/using/#write-a-rule) page
    explains every field. Or **Start from a template** on the Rules page, which fills in the
    form; the human replaces `PASTE-YOUR-LINK-HERE` with their own link, and the form won't
    save until they do.
@@ -162,7 +162,7 @@ Run these yourself. Neither touches a secret.
 - `curl -sS <worker-url>/health`. `"ok": true` with `"database": "ok"` is healthy, and
   `accounts.active` should count the connected accounts. On a new deploy, `"cron"` and
   `"poll"` say `"starting"`, which is fine. On a 503, see
-  [/health answers 503](https://charanmn7.github.io/ig-comment-dm/docs/troubleshooting/#health-answers-503).
+  [/health answers 503](https://hemang-doshi.github.io/ig-comment-dm/docs/troubleshooting/#health-answers-503).
 - `npm run doctor`. It checks the Cloudflare login, which secrets exist (names, never values),
   the tables, connected accounts, active rules, rejected webhooks and the cron jobs. Explain
   each ✗ and `!` and its fix. It can't see whether the Meta app is Live, or whether Hidden
@@ -174,4 +174,4 @@ off while testing. On the admin **Home** page, **Did Instagram reach us?** shows
 called the webhook (**Wrong secret** means `FACEBOOK_APP_SECRET` is wrong or missing), and
 **Last 20 sends** shows the DM. The Worker also polls recent comments every 5 minutes. For
 anything else, start from
-[Troubleshooting](https://charanmn7.github.io/ig-comment-dm/docs/troubleshooting/).
+[Troubleshooting](https://hemang-doshi.github.io/ig-comment-dm/docs/troubleshooting/).

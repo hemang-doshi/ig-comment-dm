@@ -20,6 +20,20 @@ updates:
     open-pull-requests-limit: 5
     labels: [dependencies]
 
+  # The dashboard app has its own package.json and lockfile too.
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    groups:
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+      radix:
+        patterns: ["@radix-ui/*"]
+
   # Workflows pin each action to a commit SHA, with its version in a comment.
   # This keeps both current.
   - package-ecosystem: github-actions

@@ -53,10 +53,10 @@ describe('parseArgs', () => {
 
 describe('sameRepo', () => {
   it('treats the HTTPS and SSH spellings of one repository as the same', () => {
-    assert.equal(sameRepo('https://github.com/CharanMN7/ig-comment-dm.git', OFFICIAL_REPO), true);
-    assert.equal(sameRepo('https://github.com/charanmn7/ig-comment-dm', OFFICIAL_REPO), true);
-    assert.equal(sameRepo('git@github.com:CharanMN7/ig-comment-dm.git', OFFICIAL_REPO), true);
-    assert.equal(sameRepo('ssh://git@github.com/CharanMN7/ig-comment-dm.git/', OFFICIAL_REPO), true);
+    assert.equal(sameRepo('https://github.com/hemang-doshi/ig-comment-dm.git', OFFICIAL_REPO), true);
+    assert.equal(sameRepo('https://github.com/hemang-doshi/ig-comment-dm', OFFICIAL_REPO), true);
+    assert.equal(sameRepo('git@github.com:hemang-doshi/ig-comment-dm.git', OFFICIAL_REPO), true);
+    assert.equal(sameRepo('ssh://git@github.com/hemang-doshi/ig-comment-dm.git/', OFFICIAL_REPO), true);
   });
 
   it('tells a fork or a Deploy button copy apart from the official repository', () => {

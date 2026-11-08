@@ -1,0 +1,61 @@
+---
+description: The dashboard app at /a/<secret>/app, covering status, activity with exact reasons, the automation editor, health and limits.
+---
+
+Logging in to your admin URL lands on the dashboard at `/a/<your-secret>/app`. It's a React app served by the same Worker. It talks to a JSON API under `/a/<your-secret>/api`, which needs your login session and a CSRF token for every change. Set `DASHBOARD` to anything other than `on` in `wrangler.toml` to land on the classic pages instead. Those pages are always under **Settings → Classic admin pages**.
+
+Bookmark it, or install it from your browser's menu (**Install app** or **Add to Home Screen**) so it opens like a native app.
+
+## Overview
+
+A single status line answers "is it working?": **Live**, **Catching up** (DMs waiting in the queue) or **Paused** (Meta's hourly allowance ran out, with the time it resumes). Below it:
+- today's numbers
+- a 24-hour chart
+- an on/off switch for each automation
+- the latest keyword comments
+
+## Activity
+
+Every comment that matched a rule, with tabs for **All**, **Sent**, **Waiting**, **Didn’t go through** and **Skipped / answered earlier**. You can search by username or comment text, and filter by automation. Open any row to see:
+
+- what they commented, and when
+- **what happened, in plain English**, from Meta's actual answer:
+
+  | For example | Meaning |
+  |---|---|
+  | **Answered earlier** | Another tool already sent this comment's one private reply |
+  | **User can't be found** | The account is restricted, deactivated, or doesn't accept messages |
+  | **Comment deleted** | The comment is gone |
+  | **Paused by Meta's limit** | It goes out automatically when the pause ends |
+  | **Unconfirmed** | Instagram's answer was lost, and the bot re-checks it by itself |
+
+- **what to do**, and Meta's raw error code
+- **Check again now**, for anything retryable. It can't send twice, because Instagram refuses a second private reply to the same comment.
+
+## Automations
+
+A card per automation, with the reel's thumbnail, its keywords and its stats: sent, waiting and didn't go. The editor has:
+
+- a post picker with thumbnails of your recent reels, or **All posts**
+- keyword chips, whole-word or anywhere matching, exclusions, and **every comment** mode
+- the DM, with `{username}` and link detection
+- public replies, one picked at random per comment
+- a **live phone preview** and a **Try a comment** box that runs the same matcher as the Worker
+
+**Pause** keeps an automation's history and stops new DMs. **Delete** asks first and offers to pause instead.
+
+## Settings
+
+- **Instagram connection.** Unified login connections don't expire.
+- **Health** for the three ways comments arrive: instant webhooks, the 5-minute backup sweep and the daily check.
+- **Meta's hourly allowance.** New apps get about 200 calls per connected person per hour, measured partly by **time spent**, so a burst of slow answers from Instagram uses it faster than the call count suggests. The meter shows the last hour. When Meta pauses the bot, comments wait without using up their tries and go out newest first. Comments close to the 7-day limit go first of all.
+- **Live from Instagram:** the last 30 webhook notifications.
+- The theme: system, light or dark.
+
+## Keyboard
+
+| Keys | Does |
+|---|---|
+| <kbd>⌘</kbd> <kbd>K</kbd> / <kbd>Ctrl</kbd> <kbd>K</kbd> | Search and run anything |
+| <kbd>N</kbd> | New automation |
+| <kbd>G</kbd> then <kbd>O</kbd> / <kbd>A</kbd> / <kbd>U</kbd> / <kbd>S</kbd> | Go to Overview / Activity / Automations / Settings |

@@ -1,0 +1,59 @@
+---
+description: Set up a Meta app created since late October 2026, which can only use Unified login (Facebook Login for Business with a configuration id).
+---
+
+Meta stopped offering **Instagram Login** to new apps in late October 2026. A new app's **Use cases → Instagram API** page shows only **API setup with Facebook login**, which Meta calls Unified login: Facebook Login for Business, driven by a **configuration**. The bot supports both. Setting the `META_LOGIN_CONFIG_ID` secret switches it to Unified login.
+
+What changes with Unified login:
+
+- Logging in goes through `facebook.com/dialog/oauth` with your configuration id, and Graph calls go to `graph.facebook.com`.
+- The token is a **system-user access token that doesn't expire**, so there's no 60-day refresh to miss.
+- The connected account comes from `/me/assigned_instagram_accounts`, so the configuration must include your Instagram account as an asset.
+- One **App secret** both exchanges the login code and signs webhooks.
+
+## 1. Create the app
+
+1. Open [developers.facebook.com/apps](https://developers.facebook.com/apps/) and click **Create app**.
+2. Pick the **Instagram** use case (it may read "Manage messaging & content on Instagram").
+3. Connect a **business portfolio**. Meta requires one for this use case. If you don't have one, create it from the same screen.
+4. Finish creating the app.
+
+## 2. Create the login configuration
+
+1. Open **Facebook Login for Business → Configurations** and click **Create configuration**.
+2. For **Login variation**, choose **General**. For **Access token**, choose **System-user access token**, with the expiry set to **Never**.
+3. For **Assets**, pick **Instagram accounts** only. The bot doesn't need Pages or ad accounts, and skipping ad accounts keeps it away from anything that spends money.
+4. For **Permissions**, add `instagram_basic`, `instagram_manage_comments` and `instagram_manage_messages`.
+5. Save, and copy the **configuration id**: a long number.
+
+## 3. Copy the values
+
+| Secret | Where it is |
+|---|---|
+| `META_LOGIN_CONFIG_ID` | The configuration id from step 2 |
+| `META_APP_ID` | The **App ID** at the top of the app dashboard |
+| `META_APP_SECRET` | **App settings → Basic → App secret → Show** |
+| `FACEBOOK_APP_SECRET` | The same App secret. `npm run setup` fills it in for you |
+
+Run `npm run setup`, choose **1. Unified login** and paste them in. Already deployed? Set them by hand:
+
+```bash
+npx wrangler secret put META_LOGIN_CONFIG_ID
+npx wrangler secret put META_APP_ID
+npx wrangler secret put META_APP_SECRET
+npx wrangler secret put FACEBOOK_APP_SECRET
+```
+
+## 4. Point Meta at your Worker
+
+- **Facebook Login for Business → Settings → Valid OAuth Redirect URIs:** add `https://<your-worker>/connect/callback` and the same line with a trailing slash.
+- **Use cases → Instagram API → API setup with Facebook login → Configure webhooks:** set the callback URL to `https://<your-worker>/webhook` with your verify token, then subscribe to **comments**.
+- **App settings → Basic:** fill in the privacy policy, terms and data-deletion URLs that `npm run setup` printed, then **Publish** the app. Meta delivers real comment webhooks only once the app is Live.
+
+## 5. Connect
+
+Open your admin URL, log in and click **Connect**. Meta shows the configuration's consent screen. Choose your Instagram account, approve, and you're returned to the dashboard with the account connected. The Worker then subscribes the account to comment webhooks by itself.
+
+<Tip>
+**Turn off every other comment automation** on the same account first, including Meta Business Suite's own. Instagram allows one private reply per comment. Whichever tool answers first wins, and the bot then shows the comment as "Answered earlier".
+</Tip>

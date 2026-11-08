@@ -5,10 +5,10 @@
 **Do not open a public issue for a security problem.**
 
 Use GitHub's private reporting instead:
-[**Report a vulnerability**](https://github.com/CharanMN7/ig-comment-dm/security/advisories/new)
+[**Report a vulnerability**](https://github.com/hemang-doshi/ig-comment-dm/security/advisories/new)
 
-If that is unavailable to you, email `charanxmn@gmail.com` with `[ig-comment-dm security]`
-in the subject line.
+If that is unavailable to you, contact [@hemang-doshi](https://github.com/hemang-doshi) privately
+through the contact details on that GitHub profile, with `[ig-comment-dm security]` in the subject.
 
 Please include: what you found, the steps to reproduce it, and what an attacker
 gains. A proof of concept against **your own** deployment is welcome. Do not test
@@ -148,5 +148,5 @@ Accounts page, which takes about 20 seconds each.
 
 The latest version on `master` is the only supported one; there are no backports.
 `npm run update` brings a copy up to date, and the
-[changelog](https://charanmn7.github.io/ig-comment-dm/docs/changelog/) lists security
+[changelog](https://hemang-doshi.github.io/ig-comment-dm/docs/changelog/) lists security
 fixes under each version.

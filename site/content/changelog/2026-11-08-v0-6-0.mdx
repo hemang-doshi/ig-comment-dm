@@ -1,0 +1,30 @@
+---
+title: Unified login and the dashboard
+date: 2026-11-08
+version: 0.6.0
+---
+
+Meta apps created since late October 2026 can only use Unified login, and this release supports it. It also adds a dashboard app that says exactly why any comment didn't get its DM, and a queue that keeps working through Meta's hourly app limit instead of giving up.
+
+<Warning>
+**Upgrading from 0.5.0**
+
+- Run `npm run update`, or `npm run deploy` after pulling. Migration 012 adds the comment text and post to each send, so Activity can show what people wrote.
+- Deploys now build the dashboard first (`npm run build:web`), because `wrangler.toml` serves it from `web/dist`. A plain `npx wrangler deploy` on a fresh clone fails until you've built it once.
+- Logging in now lands on the dashboard. Set `DASHBOARD` to anything but `on` in `wrangler.toml` to keep the classic pages.
+- Copies on Instagram Login need nothing else. To move a new Meta app to Unified login, see [Unified login](/unified-login).
+</Warning>
+
+### Added
+
+- **Unified login**: Facebook Login for Business with a configuration id, switched on by the `META_LOGIN_CONFIG_ID` secret. It gives system-user tokens that don't expire, uses `graph.facebook.com`, and finds the connected account from `/me/assigned_instagram_accounts`. `npm run setup` asks which login your app uses.
+- **The dashboard** at `/a/<secret>/app`: Overview, Activity, Automations and Settings. It has a live phone preview in the editor, a ⌘K palette, keyboard shortcuts, light and dark themes, and a phone layout. Its JSON API at `/a/<secret>/api` needs a session and a CSRF token for every change.
+- **Exact reasons** for every DM that didn't go, taken from Meta's real answer: already answered by another tool, user can't be found, comment deleted, rate-limited and more. Each comes with what to do and the error code.
+- **Automatic re-checks** for unconfirmed DMs, up to 3, ten minutes apart. A re-check can't double-send, because Instagram refuses a second private reply, so a refusal of that kind confirms the first one arrived.
+- Meta's `X-App-Usage` and `X-Business-Use-Case-Usage` headers are logged on every Graph call.
+
+### Changed
+
+- **Meta's app-wide rate limit (error code 4) no longer uses up a comment's tries.** The comment waits for the 15-minute pause, then goes out. Before, a busy hour could make the bot give up on a commenter for good.
+- **The queue sends the newest comments first**, so someone who just commented doesn't wait behind a backlog. Comments within a day of Instagram's 7-day limit still go first of all.
+- "Already has a reply" refusals are shown as **Answered earlier**, not as failures, and are left out of problem counts.

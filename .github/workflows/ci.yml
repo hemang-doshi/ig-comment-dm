@@ -24,14 +24,25 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
 
       - run: npm ci
+
+      # wrangler.toml serves the dashboard from web/dist, and Wrangler (and the
+      # test pool, which reads wrangler.toml) refuses a missing assets folder.
+      - name: Build the dashboard app
+        run: npm run build:web
 
       - name: Typecheck
         run: npm run typecheck
 
       - name: Unit tests
         run: npm run test:unit
+
+      - name: Dashboard lint
+        run: npm --prefix web run lint
 
       - name: Worker builds and starts
         run: npx wrangler deploy --dry-run --outdir /tmp/worker-build
@@ -51,8 +62,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
 
       - run: npm ci
+
+      # wrangler.toml serves the dashboard from web/dist, and Wrangler (and the
+      # test pool, which reads wrangler.toml) refuses a missing assets folder.
+      - name: Build the dashboard app
+        run: npm run build:web
 
       - name: Migrations apply with Wrangler's runner
         # The tests below apply migrations through the test pool, which accepts

@@ -1,6 +1,6 @@
 {
   "name": "ig-comment-dm",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "setup": "node --experimental-strip-types scripts/setup.ts",
@@ -19,7 +19,8 @@
     "selftest": "node --experimental-strip-types scripts/selftest.ts",
     "keys": "node --experimental-strip-types scripts/keys.ts",
     "icons": "node --experimental-strip-types scripts/icons.ts",
-    "build:web": "npm --prefix web ci --no-audit --no-fund && npm --prefix web run build"
+    "build:web": "npm --prefix web ci --no-audit --no-fund && npm --prefix web run build",
+    "build": "npm run build:web"
   },
   "dependencies": {
     "hono": "^4.13.13"
@@ -33,17 +34,34 @@
     "vitest": "5.0.5",
     "wrangler": "^4.153.0"
   },
-  "description": "Self-hosted Instagram comment-to-DM automation on a single Cloudflare Worker.",
+  "description": "Self-hosted Instagram comment-to-DM automation on Cloudflare's free plan: one Worker, one D1 database, Meta's official API, and a dashboard.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/CharanMN7/ig-comment-dm.git"
+    "url": "git+https://github.com/hemang-doshi/ig-comment-dm.git"
   },
   "bugs": {
-    "url": "https://github.com/CharanMN7/ig-comment-dm/issues"
+    "url": "https://github.com/hemang-doshi/ig-comment-dm/issues"
   },
-  "homepage": "https://github.com/CharanMN7/ig-comment-dm#readme",
+  "homepage": "https://github.com/hemang-doshi/ig-comment-dm#readme",
   "engines": {
     "node": ">=22.13"
-  }
+  },
+  "author": "Hemang Doshi (https://github.com/hemang-doshi)",
+  "contributors": [
+    "Charan MN (https://github.com/CharanMN7)"
+  ],
+  "keywords": [
+    "cloudflare-d1",
+    "cloudflare-workers",
+    "comment-to-dm",
+    "creator-tools",
+    "dm-automation",
+    "hono",
+    "instagram",
+    "instagram-api",
+    "meta-graph-api",
+    "react",
+    "self-hosted"
+  ]
 }

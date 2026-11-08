@@ -16,7 +16,7 @@ if (!existsSync(dist)) {
   process.exit(1);
 }
 
-const siteUrl = new URL(process.env.SITE_URL || 'https://charanmn7.github.io/ig-comment-dm/');
+const siteUrl = new URL(process.env.SITE_URL || 'https://hemang-doshi.github.io/ig-comment-dm/');
 const base = siteUrl.pathname.endsWith('/') ? siteUrl.pathname : `${siteUrl.pathname}/`;
 
 function walk(dir) {

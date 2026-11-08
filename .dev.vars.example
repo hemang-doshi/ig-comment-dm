@@ -6,6 +6,12 @@
 #   npx wrangler secret put <NAME>
 
 # --- From the Meta dashboard ---------------------------------------------
+# Unified login (every Meta app created since late October 2026): set this to
+# your Facebook Login for Business configuration id, META_APP_ID to the App ID
+# at the top of the dashboard, and both secrets below to App settings → Basic →
+# App secret. Leave it empty for classic Instagram Login, described below.
+META_LOGIN_CONFIG_ID=
+
 # Instagram → API setup with Instagram login → Business login settings.
 # NOT the app id printed at the top of the dashboard — that one fails with
 # "Invalid redirect_uri".

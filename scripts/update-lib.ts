@@ -4,9 +4,9 @@
  * runs the commands and prints what these return.
  */
 
-export const OFFICIAL_REPO = 'https://github.com/CharanMN7/ig-comment-dm.git';
+export const OFFICIAL_REPO = 'https://github.com/hemang-doshi/ig-comment-dm.git';
 export const UPSTREAM_BRANCH = 'master';
-export const LATEST_ZIP = 'https://github.com/CharanMN7/ig-comment-dm/archive/refs/heads/master.zip';
+export const LATEST_ZIP = 'https://github.com/hemang-doshi/ig-comment-dm/archive/refs/heads/master.zip';
 
 /** Why the command stopped, and what the person should do about it. */
 export interface Stop {

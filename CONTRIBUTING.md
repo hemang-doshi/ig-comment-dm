@@ -12,7 +12,7 @@ PRs that aren't linked to an issue assigned to their author are closed automatic
 
 ## Good first issues are for first-timers
 
-Issues labelled [`good first issue`](https://github.com/CharanMN7/ig-comment-dm/labels/good%20first%20issue) are for people making their first contribution here, one per person. After your first merged PR, pick something else so newcomers get a turn.
+Issues labelled [`good first issue`](https://github.com/hemang-doshi/ig-comment-dm/labels/good%20first%20issue) are for people making their first contribution here, one per person. After your first merged PR, pick something else so newcomers get a turn.
 
 ## Limits
 
@@ -47,5 +47,5 @@ Never commit `.dev.vars`, a `database_id`, an access token, or a screenshot show
 your admin URL. For a vulnerability, don't open an issue: see [SECURITY.md](SECURITY.md).
 
 Local setup, the test suite, house style and adding a migration are covered in the
-full **[contributor guide](https://charanmn7.github.io/ig-comment-dm/docs/contributing/)**.
+full **[contributor guide](https://hemang-doshi.github.io/ig-comment-dm/docs/contributing/)**.
 Using a coding agent? It should read [AGENTS.md](AGENTS.md) first.

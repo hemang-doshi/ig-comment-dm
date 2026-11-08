@@ -17,7 +17,7 @@ It's for people who'd rather approve each step than hunt for the right screen in
 Clone the repo and start Claude Code inside it, with the browser connected:
 
 ```bash
-git clone https://github.com/CharanMN7/ig-comment-dm.git
+git clone https://github.com/hemang-doshi/ig-comment-dm.git
 cd ig-comment-dm
 claude --chrome
 ```
@@ -30,7 +30,7 @@ Then say:
 Set this up.
 ```
 
-The repo ships a Claude Code skill for exactly this, [`.claude/skills/setup/SKILL.md`](https://github.com/CharanMN7/ig-comment-dm/blob/master/.claude/skills/setup/SKILL.md), and Claude picks it up when you ask. Type `/setup` to start it by name. It follows the [self-setup guide](/setup) step by step, stops and asks whenever one of Meta's screens doesn't match it, and keeps to the split in the table below. It works without the browser too: Claude describes each screen and you click.
+The repo ships a Claude Code skill for exactly this, [`.claude/skills/setup/SKILL.md`](https://github.com/hemang-doshi/ig-comment-dm/blob/master/.claude/skills/setup/SKILL.md), and Claude picks it up when you ask. Type `/setup` to start it by name. It follows the [self-setup guide](/setup) step by step, stops and asks whenever one of Meta's screens doesn't match it, and keeps to the split in the table below. It works without the browser too: Claude describes each screen and you click.
 
 ## Who does what
 
@@ -61,7 +61,7 @@ Set up ig-comment-dm for me: a self-hosted Instagram comment-to-DM Worker on my 
 
 Use the terminal for the repo and Chrome for Meta's developer dashboard. The manual guide is site/content/docs/setup.mdx in the repo. Follow it, and stop and ask me whenever a screen doesn't match it.
 
-1. Check that Node.js is version 22.13 or newer. Clone https://github.com/CharanMN7/ig-comment-dm.git and run npm install.
+1. Check that Node.js is version 22.13 or newer. Clone https://github.com/hemang-doshi/ig-comment-dm.git and run npm install.
 2. In Chrome, open https://developers.facebook.com/apps/ and do Part 1: create the app and add the Instagram product. Show me where the Instagram App ID, the Instagram App Secret and the Facebook App Secret are, then wait.
 3. Do Part 2 for these Instagram usernames: <your usernames>. Then remind me to accept each tester invite myself.
 4. Tell me to run "npx wrangler login" and then "npm run setup" in my own terminal, outside this chat. Wait until I give you my Worker URL.

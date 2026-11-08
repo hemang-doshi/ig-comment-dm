@@ -28,9 +28,10 @@ function decodesTo32Bytes(value: string): boolean {
 export function findConfigProblems(env: Env): ConfigProblem[] {
   const problems: ConfigProblem[] = [];
 
+  const unified = (env.META_LOGIN_CONFIG_ID ?? '').trim() !== '';
   const required: Array<[keyof Env, string]> = [
-    ['META_APP_ID', 'Instagram App ID from Business login settings'],
-    ['META_APP_SECRET', 'Instagram App Secret from Business login settings'],
+    ['META_APP_ID', unified ? 'the App ID at the top of the Meta app dashboard' : 'Instagram App ID from Business login settings'],
+    ['META_APP_SECRET', unified ? 'the App secret from App settings → Basic' : 'Instagram App Secret from Business login settings'],
     ['WEBHOOK_VERIFY_TOKEN', 'the value you also typed into Meta’s Verify token box'],
     ['TOKEN_ENCRYPTION_KEY', 'the AES key for Instagram tokens at rest'],
     ['SESSION_SIGNING_KEY', 'the HMAC key for admin session cookies'],

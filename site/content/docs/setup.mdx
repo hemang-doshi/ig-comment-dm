@@ -29,6 +29,10 @@ Keep a password manager or a private note open. `npm run setup` prints your admi
 
 ## 1. Create the Meta app
 
+<Warning>
+**Created your Meta app after late October 2026?** New apps can't use Instagram Login any more. Under **Use cases → Instagram API** you'll only see **API setup with Facebook login**. Follow [Unified login](/unified-login) for Parts 1 and 4 instead. `npm run setup` asks which one your app uses.
+</Warning>
+
 1. Open [developers.facebook.com/apps](https://developers.facebook.com/apps/).
 2. Click **Create app**.
 3. If it asks for a use case, pick **Other**, then continue. If it asks for an app type, pick **Business**.
@@ -99,12 +103,12 @@ Skip step 4 and Connect fails with **Insufficient developer role**.
 
 When you click Connect, Instagram must be logged in as the account you just invited. A different account already logged in on that browser is the usual reason one profile works and another doesn't. If that happens, open a private window, log in to your admin page there, and click Connect from that window.
 
-If Meta refuses to add the username because it already has a role on the business that owns the app, that's a separate problem. [Open an issue](https://github.com/CharanMN7/ig-comment-dm/issues/new/choose) with the exact message.
+If Meta refuses to add the username because it already has a role on the business that owns the app, that's a separate problem. [Open an issue](https://github.com/hemang-doshi/ig-comment-dm/issues/new/choose) with the exact message.
 
 ## 3. Deploy
 
 ```bash
-git clone https://github.com/CharanMN7/ig-comment-dm.git
+git clone https://github.com/hemang-doshi/ig-comment-dm.git
 cd ig-comment-dm
 npm install
 npx wrangler login

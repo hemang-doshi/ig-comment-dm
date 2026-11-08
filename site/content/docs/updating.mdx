@@ -13,7 +13,7 @@ Note the `run`: plain `npm update` is npm's own command, which upgrades dependen
 In order, it:
 
 1. Stops if you have edits that aren't saved in git, and says how to save or drop them. A D1 `database_id` line in `wrangler.toml` is the exception: it's kept as it is. Wrangler doesn't write one there (it finds the database by name), but older copies had it pasted in by hand.
-2. Adds a remote called `upstream` for `CharanMN7/ig-comment-dm` if you don't have one. It never touches `origin`.
+2. Adds a remote called `upstream` for `hemang-doshi/ig-comment-dm` if you don't have one. It never touches `origin`.
 3. Fetches the latest version and lists what's new: how many changes, with their titles. New files in `migrations/` are called out, because they change your database.
 4. Asks before going further. `--yes` skips the question.
 5. Merges `upstream/master` into your branch: a fast-forward when you have no commits of your own, a merge commit when you do. If your own edits clash with the new version, it backs the merge out, leaves your files exactly as they were, and lists the files with two ways to fix it.
@@ -58,7 +58,7 @@ On the first run it works out which version Cloudflare copied and records that a
 Forget `--push` and the command notices the copy came from the button and stops to suggest it, rather than deploying from your computer and leaving GitHub behind.
 
 <Note>
-**Doing it by hand?** Add the remote once with `git remote add upstream https://github.com/CharanMN7/ig-comment-dm.git` and run `git fetch upstream`. Find the upstream commit Cloudflare copied, and record it once with `git merge -s ours --allow-unrelated-histories <that commit>`. From then on, `git merge upstream/master` and `git push` work like on any fork.
+**Doing it by hand?** Add the remote once with `git remote add upstream https://github.com/hemang-doshi/ig-comment-dm.git` and run `git fetch upstream`. Find the upstream commit Cloudflare copied, and record it once with `git merge -s ours --allow-unrelated-histories <that commit>`. From then on, `git merge upstream/master` and `git push` work like on any fork.
 </Note>
 
 ## If your copy has no `npm run update` yet
@@ -66,7 +66,7 @@ Forget `--push` and the command notices the copy came from the button and stops 
 Copies made before the command existed don't have it. Fetch just the script from upstream once, then run it directly; the update itself brings in the `npm run update` shortcut for next time:
 
 ```bash
-git remote add upstream https://github.com/CharanMN7/ig-comment-dm.git
+git remote add upstream https://github.com/hemang-doshi/ig-comment-dm.git
 git fetch upstream
 git checkout upstream/master -- scripts/update.ts scripts/update-lib.ts
 git commit -m "Add the update script"
@@ -79,7 +79,7 @@ Add `--push` to the last line if Cloudflare deploys your copy from GitHub (the D
 
 A ZIP has no git history, so `npm run update` stops and offers two ways forward.
 
-**Start from a fresh copy.** Download the [latest ZIP](https://github.com/CharanMN7/ig-comment-dm/archive/refs/heads/master.zip), unzip it into a new folder, and run `npm install` and `npm run deploy` there. Your secrets and database live in Cloudflare, so nothing is lost. If you changed any files in the old folder, copy them across first.
+**Start from a fresh copy.** Download the [latest ZIP](https://github.com/hemang-doshi/ig-comment-dm/archive/refs/heads/master.zip), unzip it into a new folder, and run `npm install` and `npm run deploy` there. Your secrets and database live in Cloudflare, so nothing is lost. If you changed any files in the old folder, copy them across first.
 
 **Or make the folder a git repository once**, and use `npm run update` from then on. It works out which version you downloaded:
 

@@ -2,11 +2,11 @@
 
 For coding agents (Claude Code, Codex, Cursor and the rest) working in this repository. The
 full contributor guide is [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[docs site](https://charanmn7.github.io/ig-comment-dm/docs/contributing/). This file is the
+[docs site](https://hemang-doshi.github.io/ig-comment-dm/docs/contributing/). This file is the
 short version, plus the one rule agents keep missing.
 
 Setting up your own copy rather than changing the code? Follow the
-[self-setup guide](https://charanmn7.github.io/ig-comment-dm/docs/setup/). In Claude Code,
+[self-setup guide](https://hemang-doshi.github.io/ig-comment-dm/docs/setup/). In Claude Code,
 say "set this up" and the project skill in `.claude/skills/setup/` walks you through it.
 
 ## Before you write code for a pull request
@@ -45,11 +45,18 @@ A self-hosted Instagram comment-to-DM tool. A comment webhook arrives, a keyword
 matches, and the Worker sends a private-reply DM. It's small on purpose, and these limits are
 the design, not gaps to fill:
 
-- **One Cloudflare Worker, one D1 database** (binding `DB`). [Hono](https://hono.dev) routes,
-  HTML rendered on the server. No build step, no bundler config.
-- **No client-side JavaScript.** The CSP is `default-src 'none'` with no `script-src`, so an
-  inline `<script>` or `onclick=` silently does nothing. Use forms and links.
-- **No new runtime dependencies.** The list is `hono` and nothing else.
+- **One Cloudflare Worker, one D1 database** (binding `DB`). [Hono](https://hono.dev) routes.
+  The classic admin pages are HTML rendered on the server.
+- **The classic pages have no client-side JavaScript.** Their CSP is `default-src 'none'` with
+  no `script-src`, so an inline `<script>` or `onclick=` silently does nothing. Use forms and links.
+- **The dashboard app is the exception, and lives in `web/`.** It's React 19 + Vite + Tailwind v4,
+  built by `npm run build:web` into `web/dist`, and served as Workers static assets under
+  `/app-static/`. Its shell (`src/routes/app.ts`) has its own CSP with `script-src 'self'`. It
+  talks only to the JSON API in `src/routes/api.ts`, which needs a session plus an
+  `X-CSRF-Token` header on every non-GET request. Plain-English reasons for Meta's answers
+  live in `src/explain.ts`. Keep the API and that module covered in `test/api.test.ts`.
+- **No new Worker runtime dependencies.** The list is `hono` and nothing else. Dashboard
+  dependencies belong in `web/package.json`.
 - **Web Crypto only.** Never enable `nodejs_compat`.
 
 Where things live: `src/routes/` (admin panel, Connect, webhook, `/health`, legal pages),
@@ -57,7 +64,7 @@ Where things live: `src/routes/` (admin panel, Connect, webhook, `/health`, lega
 (every Graph API call), `src/queue.ts` (the send queue and retries), `src/cron.ts` (scheduled
 jobs), `migrations/`, `test/`, `scripts/`
 (setup, doctor, unit tests), and `site/` (the docs, a separate package). The
-[architecture page](https://charanmn7.github.io/ig-comment-dm/docs/architecture/) has the
+[architecture page](https://hemang-doshi.github.io/ig-comment-dm/docs/architecture/) has the
 whole map.
 
 ## Commands

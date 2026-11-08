@@ -3,7 +3,7 @@
   "favicon": "/favicon.svg",
   "navbarLinks": [
     { "name": "Home", "href": "/" },
-    { "name": "GitHub", "href": "https://github.com/CharanMN7/ig-comment-dm" }
+    { "name": "GitHub", "href": "https://github.com/hemang-doshi/ig-comment-dm" }
   ],
   "tabs": [
     {
@@ -14,6 +14,7 @@
           "pages": [
             { "title": "Overview", "slug": "", "file": "index.mdx" },
             { "title": "Self-setup guide", "slug": "setup", "file": "setup.mdx" },
+            { "title": "Unified login (new Meta apps)", "slug": "unified-login", "file": "unified-login.mdx" },
             { "title": "Agent setup guide", "slug": "agent-setup", "file": "agent-setup.mdx" }
           ]
         },
@@ -21,6 +22,7 @@
           "group": "Running it",
           "pages": [
             { "title": "Using it", "slug": "using", "file": "using.mdx" },
+            { "title": "The dashboard", "slug": "dashboard", "file": "dashboard.mdx" },
             { "title": "Updating your copy", "slug": "updating", "file": "updating.mdx" },
             { "title": "Troubleshooting", "slug": "troubleshooting", "file": "troubleshooting.mdx" }
           ]

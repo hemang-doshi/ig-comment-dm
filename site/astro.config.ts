@@ -6,7 +6,7 @@ import inkform from '@inkform/astro';
 // The Pages workflow passes the URL that GitHub reports for the repo, so a
 // custom domain set in the repo's Pages settings is picked up on the next
 // deploy. Locally, change this line or set SITE_URL.
-const siteUrl = new URL(process.env.SITE_URL || 'https://charanmn7.github.io/ig-comment-dm/');
+const siteUrl = new URL(process.env.SITE_URL || 'https://hemang-doshi.github.io/ig-comment-dm/');
 const base = siteUrl.pathname.replace(/\/+$/, '') || '/';
 
 export default defineConfig({

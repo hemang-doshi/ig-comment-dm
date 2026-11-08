@@ -1,0 +1,70 @@
+name: Release
+
+# Pushing a tag like v0.6.0 publishes a GitHub release whose notes are the
+# matching site/content/changelog/*-v0-6-0.mdx file, front matter removed.
+# Uses only the gh CLI that ships on the runner, so there's no third-party
+# action holding a write token.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions: {}
+
+jobs:
+  release:
+    name: Publish the release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # create the release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check the tag matches package.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::Tag $TAG does not match package.json version $version."
+            exit 1
+          fi
+
+      - name: Write the notes from the changelog
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          slug=$(printf '%s' "${TAG}" | tr '.' '-')
+          file=$(ls site/content/changelog/*-"${slug}".mdx 2>/dev/null | head -n 1 || true)
+          if [ -z "$file" ]; then
+            echo "::error::No site/content/changelog/*-${slug}.mdx for ${TAG}."
+            exit 1
+          fi
+          title=$(sed -n 's/^title: *//p' "$file" | head -n 1)
+          echo "TITLE=${TAG}: ${title}" >> "$GITHUB_ENV"
+          # Drop the front matter, and turn the docs site's <Warning> block into a quote.
+          awk '
+            /^---$/ && fm < 2 { fm++; next }
+            fm < 2 { next }
+            /^<Warning>/ { inwarn = 1; print "> [!WARNING]"; next }
+            /^<\/Warning>/ { inwarn = 0; next }
+            inwarn { print ($0 == "" ? ">" : "> " $0); next }
+            { print }
+          ' "$file" \
+            | sed -E 's#\]\(/([a-z])#](https://hemang-doshi.github.io/ig-comment-dm/docs/\1#g' > notes.md
+          {
+            echo
+            echo "Full notes: https://hemang-doshi.github.io/ig-comment-dm/docs/changelog/#${slug}"
+          } >> notes.md
+          cat notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TITLE" --notes-file notes.md
+          else
+            gh release create "$TAG" --title "$TITLE" --notes-file notes.md --verify-tag --latest
+          fi
