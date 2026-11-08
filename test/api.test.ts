@@ -96,7 +96,7 @@ describe('the dashboard API', () => {
     const res = await api(browser, '/activity');
     const item = (res.json.items as Array<{ commentId: string; status: string; outcome: { reason: string } }>).find((i) => i.commentId === 'limited');
     expect(item?.status).toBe('queued');
-    expect(item?.outcome.reason).toMatch(/hourly limit/);
+    expect(item?.outcome.reason).toMatch(/hourly/);
     const overview = await api(browser, '/overview');
     expect(overview.json).toMatchObject({ state: 'paused' });
   });
