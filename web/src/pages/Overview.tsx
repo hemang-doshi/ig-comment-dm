@@ -46,8 +46,8 @@ export function OverviewPage() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <section className="card lg:col-span-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <section className="card min-w-0 overflow-hidden lg:col-span-3">
           <div className="flex items-center justify-between px-5 pb-1 pt-4">
             <div>
               <h2 className="text-[15px] font-semibold">Last 24 hours</h2>
@@ -60,7 +60,7 @@ export function OverviewPage() {
           </div>
           <HourlyChart data={data} />
         </section>
-        <section className="card lg:col-span-2">
+        <section className="card min-w-0 overflow-hidden lg:col-span-2">
           <AutomationsMini />
         </section>
       </div>
@@ -206,7 +206,7 @@ function HourlyChart({ data }: { data: Overview | undefined }) {
   const max = Math.max(4, ...bars.map((b) => b.sent + b.problems));
   return (
     <div className="px-5 pb-4 pt-3">
-      <div className="flex h-36 items-end gap-[3px]" role="img" aria-label="DMs delivered per hour over the last 24 hours">
+      <div className="flex h-36 items-end gap-[2px] sm:gap-[3px]" role="img" aria-label="DMs delivered per hour over the last 24 hours">
         {bars.length === 0
           ? Array.from({ length: 24 }, (_, i) => <div key={i} className="skeleton flex-1" style={{ height: `${20 + ((i * 37) % 60)}%` }} />)
           : bars.map((b) => (
@@ -218,7 +218,7 @@ function HourlyChart({ data }: { data: Overview | undefined }) {
                   </span>
                 }
               >
-                <div className="group flex h-full flex-1 flex-col justify-end">
+                <div className="group flex h-full min-w-0 flex-1 flex-col justify-end">
                   {b.problems ? <div className="w-full rounded-t-[3px] bg-warning/70" style={{ height: `${(b.problems / max) * 100}%` }} /> : null}
                   <div
                     className={cn('w-full bg-accent/85 transition-opacity group-hover:opacity-100', b.problems ? '' : 'rounded-t-[3px]', b.sent === 0 && 'bg-border opacity-60')}
