@@ -13,7 +13,7 @@ Someone comments `GUIDE` on your reel and the link lands in their DMs about two 
 [![Cost: $0](https://img.shields.io/badge/hosting-%240%20%2F%20month-2ea44f)](#what-it-costs)
 [![GitHub stars](https://img.shields.io/github/stars/hemang-doshi/ig-comment-dm?style=flat&logo=github)](https://github.com/hemang-doshi/ig-comment-dm/stargazers)
 
-**[Quick start](#quick-start) · [Docs](https://hemang-doshi.github.io/ig-comment-dm/docs/) · [Dashboard](#the-dashboard) · [Troubleshooting](https://hemang-doshi.github.io/ig-comment-dm/docs/troubleshooting/) · [Contributing](CONTRIBUTING.md)**
+**[Set it up with AI](#the-easy-way-let-your-ai-agent-do-it) · [Quick start](#quick-start) · [Docs](https://hemang-doshi.github.io/ig-comment-dm/docs/) · [Dashboard](#the-dashboard) · [Troubleshooting](https://hemang-doshi.github.io/ig-comment-dm/docs/troubleshooting/) · [Contributing](CONTRIBUTING.md)**
 
 </div>
 
@@ -78,35 +78,40 @@ Meta webhook (signed) ───▶ your Worker ◀─── backup sweep every 5
 
 ## Quick start
 
-About 15 minutes, mostly in Meta's dashboard. You need:
+### The easy way: let your AI agent do it
 
-- Node.js 22.13 or newer
-- Free [Cloudflare](https://dash.cloudflare.com/sign-up) and [Meta for Developers](https://developers.facebook.com/) accounts
-- An Instagram **Creator or Business** account
+Open an AI agent that can use your terminal (Claude Code, Codex, Cursor, Gemini CLI or similar) and paste this:
 
-**1. Create a Meta app.** Choose the Instagram use case, then follow [Part 1](https://hemang-doshi.github.io/ig-comment-dm/docs/setup/#1-create-the-meta-app) of the setup guide.
-- New apps use **Unified login**. You'll need the App ID, the App secret and a Facebook Login for Business **configuration id** with `instagram_basic`, `instagram_manage_comments` and `instagram_manage_messages`.
-- Meta requires a business portfolio for the app.
-
-**2. Deploy:**
-
-```bash
-git clone https://github.com/hemang-doshi/ig-comment-dm.git
-cd ig-comment-dm
-npm install
-npx wrangler login
-npm run setup
+```text
+Set up https://github.com/hemang-doshi/ig-comment-dm for me. Follow SETUP-WITH-AI.md in the repo.
 ```
 
-`setup` does the following, and is safe to re-run:
-- builds the dashboard and creates the database and tables
-- asks which Meta login your app uses, then for its values
-- generates the other secrets and deploys
-- prints your admin URL and the exact strings to paste into Meta
+That's it. The agent installs and deploys everything, then walks you through Meta's dashboard (or clicks through it for you, if it can control a browser). It stops only when it needs you:
 
-**3. Finish in Meta and connect your account.** Paste in the redirect URL and webhook, publish the app, then log in to your admin URL and click **Connect** ([Parts 2 and 4–6](https://hemang-doshi.github.io/ig-comment-dm/docs/setup/#2-invite-each-instagram-account-as-a-tester)).
+1. **Log in to Cloudflare** in the tab it opens and click **Allow**. Creating an account is free.
+2. **Create a Meta app** at developers.facebook.com, with the agent guiding you.
+3. **Paste three values** from Meta into a private page that opens on your computer. Your App secret goes straight to your Cloudflare account and never through the agent's chat.
+4. **Save your dashboard link**, click **Publish** in Meta, and **Connect** your Instagram.
 
-Prefer an agent? Open the repo in Claude Code and say "set this up". A bundled skill runs the terminal side, and you keep the logins and secrets. See the [agent setup guide](https://hemang-doshi.github.io/ig-comment-dm/docs/agent-setup/).
+It takes about 15 minutes. You need an Instagram **Creator or Business** account. The agent sets up Meta's comment webhook through the API, so there's no verify token to paste.
+
+### By hand
+
+You need Node.js 22.13 or newer, free [Cloudflare](https://dash.cloudflare.com/sign-up) and [Meta for Developers](https://developers.facebook.com/) accounts, and an Instagram **Creator or Business** account.
+
+1. **Create a Meta app** with the Instagram use case ([Unified login guide](https://hemang-doshi.github.io/ig-comment-dm/docs/unified-login/)). You need the App ID, the App secret and a Facebook Login for Business configuration id.
+2. **Deploy:**
+
+   ```bash
+   git clone https://github.com/hemang-doshi/ig-comment-dm.git
+   cd ig-comment-dm
+   npm install
+   npx wrangler login
+   npm run setup
+   ```
+
+   `setup` builds the dashboard, creates the database, asks for your Meta values, generates every other secret, deploys, and sets up Meta's webhook. It's safe to re-run. At the end it prints your admin URL and what's left to do in Meta.
+3. **Finish in Meta:** add the redirect URLs, then **Publish** the app. Then open your admin URL and click **Connect**.
 
 **Updating:** run `npm run update`. It pulls the latest version, applies migrations and redeploys, and your secrets and data stay in Cloudflare. The [changelog](CHANGELOG.md) says what changed.
 

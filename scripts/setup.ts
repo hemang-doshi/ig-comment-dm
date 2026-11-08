@@ -22,6 +22,7 @@ import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { openInBrowser, startSetupForm, type FormState, type SetupForm } from './setup-form.ts';
 import { runWrangler, runWranglerWithInput, wranglerBin } from './wrangler.ts';
 
 const RESET = '\x1b[0m';
@@ -33,6 +34,17 @@ const YELLOW = '\x1b[33m';
 const CYAN = '\x1b[36m';
 
 const rotate = process.argv.includes('--rotate');
+// --agent: run by an AI agent. Nothing secret is printed or read from the
+// terminal; the person types the Meta values into a private local page
+// (setup-form.ts), which also shows them their admin link at the end. Lines
+// starting ACTION REQUIRED, WAITING and SETUP_RESULT are for the agent.
+const agentMode = process.argv.includes('--agent');
+// Tests point these at local fakes.
+const GRAPH = process.env.SETUP_GRAPH_URL || 'https://graph.facebook.com/v23.0';
+let form: SetupForm | null = null;
+/** Agent mode: whether the private page has Meta values to ask for. */
+let formAsks = false;
+const progress: FormState['steps'] = [];
 const WRANGLER = wranglerBin();
 
 // The two generated values the operator has to copy somewhere, and that
@@ -72,6 +84,9 @@ function say(msg = ''): void {
 
 function step(n: number, total: number, title: string): void {
   say(`\n${BOLD}${CYAN}[${n}/${total}]${RESET} ${BOLD}${title}${RESET}`);
+  for (const p of progress) if (p.state === 'active') p.state = 'done';
+  progress.push({ label: title, state: 'active' });
+  form?.update({ steps: progress.map((p) => ({ ...p })) });
 }
 
 function ok(msg: string): void {
@@ -85,7 +100,58 @@ function warn(msg: string): void {
 function die(msg: string, hint?: string): never {
   say(`\n${RED}${BOLD}Stopped.${RESET} ${msg}`);
   if (hint) say(`${DIM}${hint}${RESET}`);
+  if (form) {
+    for (const p of progress) if (p.state === 'active') p.state = 'failed';
+    form.update({ phase: 'error', error: `${msg} Your agent can see what went wrong and will run setup again.`, steps: progress.map((p) => ({ ...p })) });
+    // Give the page a couple of polls to show the error before the server goes away.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
+    form.close();
+  }
+  if (agentMode) say(`SETUP_RESULT ${JSON.stringify({ ok: false, error: msg, hint: hint ?? null })}`);
   process.exit(1);
+}
+
+/**
+ * Subscribes the Meta app to Instagram comment webhooks through the Graph API,
+ * which saves the person a trip through Meta's webhook screen and pasting the
+ * verify token. Meta calls the Worker's /webhook to verify it straight away, so
+ * this runs after the final deploy. Unified login apps only: an Instagram Login
+ * app's id and secret are not the Facebook app's, which this call needs.
+ */
+async function subscribeWebhook(appId: string, appSecret: string, url: string, verifyToken: string): Promise<{ ok: boolean; detail: string }> {
+  const body = new URLSearchParams({
+    object: 'instagram',
+    callback_url: `${url}/webhook`,
+    fields: 'comments',
+    include_values: 'true',
+    verify_token: verifyToken,
+    access_token: `${appId}|${appSecret}`,
+  });
+  try {
+    const res = await fetch(`${GRAPH}/${encodeURIComponent(appId)}/subscriptions`, { method: 'POST', body });
+    const json = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
+    if (res.ok && json.success) return { ok: true, detail: 'subscribed to comments' };
+    // Meta's message never includes the secret; it describes what it rejected.
+    return { ok: false, detail: json.error?.message ?? `HTTP ${res.status}` };
+  } catch (err) {
+    return { ok: false, detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Fills in the app's privacy policy and terms URLs, which Meta asks for before Publish. Best effort. */
+async function setLegalUrls(appId: string, appSecret: string, url: string): Promise<boolean> {
+  const body = new URLSearchParams({
+    privacy_policy_url: `${url}/privacy`,
+    terms_of_service_url: `${url}/terms`,
+    access_token: `${appId}|${appSecret}`,
+  });
+  try {
+    const res = await fetch(`${GRAPH}/${encodeURIComponent(appId)}`, { method: 'POST', body });
+    const json = (await res.json().catch(() => ({}))) as { success?: boolean };
+    return res.ok && json.success === true;
+  } catch {
+    return false;
+  }
 }
 
 function b64(bytes: Uint8Array): string {
@@ -189,8 +255,15 @@ async function main(): Promise<void> {
     rl.close();
     die('Wrangler is not installed in this folder yet.', 'Run  npm install  here, then npm run setup again.');
   }
-  const who = wrangler(['whoami'], { quiet: true });
-  if (who.code !== 0 || /not authenticated|you are not logged in/i.test(who.out)) {
+  let who = wrangler(['whoami'], { quiet: true });
+  const loggedOut = (r: { code: number; out: string }): boolean => r.code !== 0 || /not authenticated|you are not logged in/i.test(r.out);
+  if (agentMode && loggedOut(who)) {
+    say('ACTION REQUIRED: Cloudflare login. A browser tab opens: sign in to Cloudflare (or create a free account) and click Allow.');
+    say('WAITING for the Cloudflare login to finish…');
+    wrangler(['login']);
+    who = wrangler(['whoami'], { quiet: true });
+  }
+  if (loggedOut(who)) {
     rl.close();
     die(
       'You are not logged in to Cloudflare.',
@@ -199,6 +272,29 @@ async function main(): Promise<void> {
   }
   const account = who.out.match(/associated with the email ([^\s.]+@[^\s.]+\.\S+)/i);
   ok(account ? `Logged in as ${account[1]}` : 'Logged in.');
+
+  // In agent mode, open the private page now, so the person can find and paste
+  // their Meta values while the first deploy runs.
+  const known = existingSecretNames();
+  if (agentMode) {
+    const need = (name: string): boolean => rotate || !known.has(name);
+    const presetMode = known.has('META_LOGIN_CONFIG_ID') ? 'unified' : known.has('META_APP_ID') ? 'instagram' : undefined;
+    const ask = {
+      mode: !presetMode || rotate,
+      configId: need('META_LOGIN_CONFIG_ID'),
+      appId: need('META_APP_ID'),
+      appSecret: need('META_APP_SECRET'),
+      facebookAppSecret: need('FACEBOOK_APP_SECRET'),
+    };
+    const nothingToAsk = !ask.mode && !ask.appId && !ask.appSecret && (presetMode === 'unified' ? !ask.configId : !ask.facebookAppSecret);
+    formAsks = !nothingToAsk;
+    form = await startSetupForm({ ask, presetMode: rotate ? undefined : presetMode });
+    form.update({ steps: progress.map((p) => ({ ...p })), ...(nothingToAsk ? { phase: 'working' } : {}) });
+    if (!process.env.SETUP_NO_BROWSER) openInBrowser(form.url);
+    say(`\nACTION REQUIRED: a private setup page opened in the browser: ${form.url}`);
+    say('  Ask the person to paste their Meta app details there. Do not ask them to paste anything into this chat.');
+    say('  If no tab opened, ask them to open that address on this computer.\n');
+  }
 
   // ------------------------------------------------------- 2. first deploy
   step(2, TOTAL, 'Creating the database and deploying');
@@ -249,99 +345,122 @@ async function main(): Promise<void> {
   // -------------------------------------------------------- 4. Meta secrets
   step(4, TOTAL, 'Your values from the Meta dashboard');
   const existing = existingSecretNames();
-
-  // Meta apps created since late October 2026 can only use Unified login
-  // (Facebook Login for Business with a configuration id). Older apps may still
-  // use Instagram Login. The two take their app id and secret from different
-  // screens, so ask which one this app is before asking for anything else.
   let unified = existing.has('META_LOGIN_CONFIG_ID');
-  if (unified && !rotate) {
-    ok('META_LOGIN_CONFIG_ID is already set — this copy uses Unified login.');
-  } else if (!existing.has('META_APP_ID') || rotate) {
-    say(`\n  ${BOLD}Which login does your Meta app use?${RESET}`);
-    say(`  ${DIM}Apps created since late October 2026 only offer Unified login: Use cases →`);
-    say(`  Instagram API shows "API setup with Facebook login" and asks for a configuration.${RESET}`);
-    say('    1. Unified login (Facebook Login for Business) — new apps');
-    say('    2. Instagram Login — apps that still show "API setup with Instagram login"');
-    unified = (await ask('  1 or 2 [1]: ')) !== '2';
-    if (unified) {
-      say(`\n  ${BOLD}Login configuration id${RESET}`);
-      say(`  ${DIM}Facebook Login for Business → Configurations → your configuration's id. Give the`);
-      say(`  configuration instagram_basic, instagram_manage_comments and instagram_manage_messages.${RESET}`);
-      let configId = '';
-      while (!/^\d{6,}$/.test(configId)) {
-        configId = await ask('  META_LOGIN_CONFIG_ID: ');
-        if (!/^\d{6,}$/.test(configId)) warn('That should be a long number.');
-      }
-      if (!(await putSecret('META_LOGIN_CONFIG_ID', configId))) {
-        rl.close();
-        die('Could not save META_LOGIN_CONFIG_ID to Cloudflare.');
-      }
-      ok('META_LOGIN_CONFIG_ID saved to Cloudflare');
-    }
-  }
-
-  const metaSecrets: Array<{ name: string; prompt: string; where: string }> = unified
-    ? [
-        {
-          name: 'META_APP_ID',
-          prompt: 'App ID',
-          where: 'The App ID at the top of the app dashboard (also under App settings → Basic).',
-        },
-        {
-          name: 'META_APP_SECRET',
-          prompt: 'App secret',
-          where: 'App settings → Basic → App secret → Show.',
-        },
-      ]
-    : [
-    {
-      name: 'META_APP_ID',
-      prompt: 'Instagram App ID',
-      where:
-        'Instagram → API setup with Instagram login → Business login settings.\n    NOT the number at the top of the dashboard — that one fails with "Invalid redirect_uri".',
-    },
-    {
-      name: 'META_APP_SECRET',
-      prompt: 'Instagram App Secret',
-      where: 'Same page, click Show next to Instagram App Secret.',
-    },
-    {
-      name: 'FACEBOOK_APP_SECRET',
-      prompt: 'Facebook App Secret',
-      where:
-        'App settings → Basic → App secret → Show. A DIFFERENT value to the one above.\n    Skipping this is the most common reason a finished setup never sends anything.',
-    },
-  ];
-
   const typed: Record<string, string> = {};
-  for (const secret of metaSecrets) {
-    if (existing.has(secret.name) && !rotate) {
-      ok(`${secret.name} is already set — leaving it alone. (npm run setup -- --rotate to replace)`);
-      continue;
+  if (form && !formAsks) {
+    ok('Meta values already set — leaving them alone.');
+  } else if (form) {
+    say('WAITING for the person to paste their Meta app details on the private setup page…');
+    const v = await form.values;
+    unified = v.mode === 'unified';
+    const toSave: Array<[string, string]> = [];
+    if (unified && v.configId) toSave.push(['META_LOGIN_CONFIG_ID', v.configId]);
+    if (v.appId) toSave.push(['META_APP_ID', v.appId]);
+    if (v.appSecret) toSave.push(['META_APP_SECRET', v.appSecret]);
+    const signing = unified ? v.appSecret : v.facebookAppSecret;
+    if (signing) toSave.push(['FACEBOOK_APP_SECRET', signing]);
+    for (const [name, value] of toSave) {
+      if (!(await putSecret(name, value))) {
+        rl.close();
+        die(`Could not save ${name} to Cloudflare.`);
+      }
+      typed[name] = value;
+      ok(`${name} saved to Cloudflare`);
     }
-    say(`\n  ${BOLD}${secret.prompt}${RESET}`);
-    say(`  ${DIM}${secret.where}${RESET}`);
-    let value = '';
-    while (value === '') {
-      value = await ask(`  ${secret.name}: `);
-      if (value === '') warn('That cannot be empty.');
+    if (!toSave.length) ok('Meta values already set — leaving them alone.');
+  } else {
+
+    // Meta apps created since late October 2026 can only use Unified login
+    // (Facebook Login for Business with a configuration id). Older apps may still
+    // use Instagram Login. The two take their app id and secret from different
+    // screens, so ask which one this app is before asking for anything else.
+    if (unified && !rotate) {
+      ok('META_LOGIN_CONFIG_ID is already set — this copy uses Unified login.');
+    } else if (!existing.has('META_APP_ID') || rotate) {
+      say(`\n  ${BOLD}Which login does your Meta app use?${RESET}`);
+      say(`  ${DIM}Apps created since late October 2026 only offer Unified login: Use cases →`);
+      say(`  Instagram API shows "API setup with Facebook login" and asks for a configuration.${RESET}`);
+      say('    1. Unified login (Facebook Login for Business) — new apps');
+      say('    2. Instagram Login — apps that still show "API setup with Instagram login"');
+      unified = (await ask('  1 or 2 [1]: ')) !== '2';
+      if (unified) {
+        say(`\n  ${BOLD}Login configuration id${RESET}`);
+        say(`  ${DIM}Facebook Login for Business → Configurations → your configuration's id. Give the`);
+        say(`  configuration instagram_basic, instagram_manage_comments and instagram_manage_messages.${RESET}`);
+        let configId = '';
+        while (!/^\d{6,}$/.test(configId)) {
+          configId = await ask('  META_LOGIN_CONFIG_ID: ');
+          if (!/^\d{6,}$/.test(configId)) warn('That should be a long number.');
+        }
+        if (!(await putSecret('META_LOGIN_CONFIG_ID', configId))) {
+          rl.close();
+          die('Could not save META_LOGIN_CONFIG_ID to Cloudflare.');
+        }
+        ok('META_LOGIN_CONFIG_ID saved to Cloudflare');
+      }
     }
-    if (!(await putSecret(secret.name, value))) {
-      rl.close();
-      die(`Could not save ${secret.name} to Cloudflare.`);
+
+    const metaSecrets: Array<{ name: string; prompt: string; where: string }> = unified
+      ? [
+          {
+            name: 'META_APP_ID',
+            prompt: 'App ID',
+            where: 'The App ID at the top of the app dashboard (also under App settings → Basic).',
+          },
+          {
+            name: 'META_APP_SECRET',
+            prompt: 'App secret',
+            where: 'App settings → Basic → App secret → Show.',
+          },
+        ]
+      : [
+      {
+        name: 'META_APP_ID',
+        prompt: 'Instagram App ID',
+        where:
+          'Instagram → API setup with Instagram login → Business login settings.\n    NOT the number at the top of the dashboard — that one fails with "Invalid redirect_uri".',
+      },
+      {
+        name: 'META_APP_SECRET',
+        prompt: 'Instagram App Secret',
+        where: 'Same page, click Show next to Instagram App Secret.',
+      },
+      {
+        name: 'FACEBOOK_APP_SECRET',
+        prompt: 'Facebook App Secret',
+        where:
+          'App settings → Basic → App secret → Show. A DIFFERENT value to the one above.\n    Skipping this is the most common reason a finished setup never sends anything.',
+      },
+    ];
+
+    for (const secret of metaSecrets) {
+      if (existing.has(secret.name) && !rotate) {
+        ok(`${secret.name} is already set — leaving it alone. (npm run setup -- --rotate to replace)`);
+        continue;
+      }
+      say(`\n  ${BOLD}${secret.prompt}${RESET}`);
+      say(`  ${DIM}${secret.where}${RESET}`);
+      let value = '';
+      while (value === '') {
+        value = await ask(`  ${secret.name}: `);
+        if (value === '') warn('That cannot be empty.');
+      }
+      if (!(await putSecret(secret.name, value))) {
+        rl.close();
+        die(`Could not save ${secret.name} to Cloudflare.`);
+      }
+      typed[secret.name] = value;
+      ok(`${secret.name} saved to Cloudflare`);
     }
-    typed[secret.name] = value;
-    ok(`${secret.name} saved to Cloudflare`);
-  }
-  // With Unified login one App secret does both jobs, the token exchange and
-  // signing webhooks, so save it under the webhook's name too.
-  if (unified && typed.META_APP_SECRET && (!existing.has('FACEBOOK_APP_SECRET') || rotate)) {
-    if (!(await putSecret('FACEBOOK_APP_SECRET', typed.META_APP_SECRET))) {
-      rl.close();
-      die('Could not save FACEBOOK_APP_SECRET to Cloudflare.');
+    // With Unified login one App secret does both jobs, the token exchange and
+    // signing webhooks, so save it under the webhook's name too.
+    if (unified && typed.META_APP_SECRET && (!existing.has('FACEBOOK_APP_SECRET') || rotate)) {
+      if (!(await putSecret('FACEBOOK_APP_SECRET', typed.META_APP_SECRET))) {
+        rl.close();
+        die('Could not save FACEBOOK_APP_SECRET to Cloudflare.');
+      }
+      ok('FACEBOOK_APP_SECRET saved (the same App secret signs webhooks)');
     }
-    ok('FACEBOOK_APP_SECRET saved (the same App secret signs webhooks)');
   }
 
   // --------------------------------------------------- 5. generated secrets
@@ -385,7 +504,7 @@ async function main(): Promise<void> {
 
   // Printed now rather than only at the end, so a later step failing, or
   // Ctrl-C, can't leave the operator without them.
-  if (shown.length) {
+  if (shown.length && !agentMode) {
     const one = shown.length === 1;
     say(`\n  ${BOLD}${YELLOW}Save ${one ? 'this' : 'these'} now.${RESET} Cloudflare keeps secrets hidden, so ${one ? 'it' : 'they'} can't be read back later.`);
     if (generated.ADMIN_URL_SECRET) say(`    Admin link     ${GREEN}${url}/a/${generated.ADMIN_URL_SECRET}${RESET}`);
@@ -397,6 +516,8 @@ async function main(): Promise<void> {
     die('Could not save PUBLIC_BASE_URL to Cloudflare.');
   }
   ok(`PUBLIC_BASE_URL set to ${url}`);
+  // If a later step fails, the page still shows the person their new link.
+  form?.update({ adminUrl: generated.ADMIN_URL_SECRET ? `${url}/a/${generated.ADMIN_URL_SECRET}` : undefined, verifyToken: generated.WEBHOOK_VERIFY_TOKEN, workerUrl: url });
 
   if (reused.length) {
     warn(`Kept the existing ${reused.join(', ')}.`);
@@ -418,6 +539,60 @@ async function main(): Promise<void> {
   const adminSecret = generated.ADMIN_URL_SECRET;
   const verifyToken = generated.WEBHOOK_VERIFY_TOKEN;
 
+  // With a Unified login app's id and secret in hand, set up Meta's side
+  // through the API instead of sending the person to two more screens.
+  let webhook: 'configured' | 'manual' | 'unchanged' = verifyToken ? 'manual' : 'unchanged';
+  let legal = false;
+  if (unified && typed.META_APP_ID && typed.META_APP_SECRET && verifyToken) {
+    const sub = await subscribeWebhook(typed.META_APP_ID, typed.META_APP_SECRET, url, verifyToken);
+    if (sub.ok) {
+      webhook = 'configured';
+      ok('Meta webhook set up for you: comments are delivered to your Worker.');
+    } else {
+      warn(`Could not set up Meta's webhook automatically (${sub.detail}). Do it by hand, below.`);
+    }
+    legal = await setLegalUrls(typed.META_APP_ID, typed.META_APP_SECRET, url);
+    if (legal) ok('Privacy policy and terms URLs filled in on your Meta app.');
+  }
+
+  if (agentMode) {
+    for (const p of progress) if (p.state === 'active') p.state = 'done';
+    const showSecrets = Boolean(adminSecret) || (Boolean(verifyToken) && webhook !== 'configured');
+    if (form && showSecrets) {
+      form.update({
+        phase: 'secrets',
+        steps: progress.map((p) => ({ ...p })),
+        adminUrl: adminSecret ? `${url}/a/${adminSecret}` : undefined,
+        verifyToken: verifyToken ?? undefined,
+        webhookAutomatic: webhook === 'configured',
+      });
+      say('\nACTION REQUIRED: the setup page now shows the person their private dashboard link. Ask them to save it and click Done there.');
+      say('WAITING for them to click Done (up to 30 minutes)…');
+      const acked = await form.acknowledged(30 * 60 * 1000);
+      say(acked ? '  They saved it.' : '  No answer after 30 minutes; the link was on screen. Carry on.');
+    }
+    form?.close();
+    rmSync(UNFINISHED, { force: true });
+    const remaining = [
+      unified
+        ? `Meta: Facebook Login for Business → Settings → Valid OAuth Redirect URIs: add ${url}/connect/callback and ${url}/connect/callback/`
+        : `Meta: Instagram → API setup with Instagram login → Business login settings → OAuth redirect URIs: add ${url}/connect/callback and ${url}/connect/callback/`,
+      ...(webhook === 'configured'
+        ? []
+        : webhook === 'manual'
+          ? [`Meta: Use cases → Instagram API → Configure webhooks: callback ${url}/webhook, subscribe to "comments" with Include values on. The person pastes the verify token from the setup page; never ask for it in chat.`]
+          : []),
+      `Meta: App settings → Basic: ${legal ? '' : `Privacy policy URL ${url}/privacy, Terms of Service URL ${url}/terms, `}User data deletion → Data deletion instructions URL ${url}/data-deletion`,
+      'Meta: Publish the app (the person clicks Publish). Without it Meta sends no real comment webhooks.',
+      'The person opens their dashboard link (saved from the setup page), creates a password, clicks Connect and approves on Facebook.',
+      'Then create the first automation in the dashboard, and run  npm run doctor  plus  curl ' + url + '/health  to check.',
+    ];
+    say(
+      `SETUP_RESULT ${JSON.stringify({ ok: true, workerUrl: url, login: unified ? 'unified' : 'instagram', webhook, legalUrls: legal ? 'set' : 'manual', adminLinkShownToPerson: Boolean(adminSecret), remaining })}`,
+    );
+    return;
+  }
+
   say(`\n${GREEN}${BOLD}Done. Your copy is live.${RESET}\n`);
   say(`${BOLD}Paste these into the Meta dashboard.${RESET} Nothing works until you do.\n`);
 
@@ -432,16 +607,20 @@ async function main(): Promise<void> {
   say(`   ${CYAN}${url}/connect/callback${RESET}`);
   say(`   ${CYAN}${url}/connect/callback/${RESET}\n`);
 
-  say(`${BOLD}2. Webhook callback URL${RESET}`);
-  say(`${DIM}   Use cases → Instagram API → API setup with ${unified ? 'Facebook' : 'Instagram'} login → Configure webhooks.`);
-  say(`   Subscribe to "comments" with Include values on.${RESET}`);
-  say(`   ${CYAN}${url}/webhook${RESET}`);
-  if (verifyToken) {
-    say(`   ${DIM}Verify token:${RESET} ${CYAN}${verifyToken}${RESET}`);
+  if (webhook === 'configured') {
+    say(`${BOLD}2. Webhook${RESET} ${GREEN}set up for you${RESET} ${DIM}(comments → ${url}/webhook)${RESET}\n`);
   } else {
-    say(`   ${DIM}Verify token: unchanged — use the one from your first setup.${RESET}`);
+    say(`${BOLD}2. Webhook callback URL${RESET}`);
+    say(`${DIM}   Use cases → Instagram API → API setup with ${unified ? 'Facebook' : 'Instagram'} login → Configure webhooks.`);
+    say(`   Subscribe to "comments" with Include values on.${RESET}`);
+    say(`   ${CYAN}${url}/webhook${RESET}`);
+    if (verifyToken) {
+      say(`   ${DIM}Verify token:${RESET} ${CYAN}${verifyToken}${RESET}`);
+    } else {
+      say(`   ${DIM}Verify token: unchanged — use the one from your first setup.${RESET}`);
+    }
+    say('');
   }
-  say('');
 
   say(`${BOLD}3. Publish the app${RESET}`);
   say(`${DIM}   Meta → Publish. Paste these three, then click Publish.`);

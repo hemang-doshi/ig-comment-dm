@@ -47,7 +47,7 @@ npx wrangler secret put FACEBOOK_APP_SECRET
 ## 4. Point Meta at your Worker
 
 - **Facebook Login for Business → Settings → Valid OAuth Redirect URIs:** add `https://<your-worker>/connect/callback` and the same line with a trailing slash.
-- **Use cases → Instagram API → API setup with Facebook login → Configure webhooks:** set the callback URL to `https://<your-worker>/webhook` with your verify token, then subscribe to **comments**.
+- **Webhook:** `npm run setup` sets this up for you through Meta's API. If it says it couldn't, go to **Use cases → Instagram API → API setup with Facebook login → Configure webhooks**, set the callback URL to `https://<your-worker>/webhook` with your verify token, and subscribe to **comments**.
 - **App settings → Basic:** fill in the privacy policy, terms and data-deletion URLs that `npm run setup` printed, then **Publish** the app. Meta delivers real comment webhooks only once the app is Live.
 
 ## 5. Connect

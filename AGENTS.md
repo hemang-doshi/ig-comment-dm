@@ -1,5 +1,10 @@
 # AGENTS.md
 
+> **Asked to set this up for someone?** Don't change any code. Follow
+> **[SETUP-WITH-AI.md](SETUP-WITH-AI.md)**: it takes a creator from this repo's link to a
+> working bot, and you stop only for their logins and a private page where they paste
+> their Meta values.
+
 For coding agents (Claude Code, Codex, Cursor and the rest) working in this repository. The
 full contributor guide is [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [docs site](https://hemang-doshi.github.io/ig-comment-dm/docs/contributing/). This file is the

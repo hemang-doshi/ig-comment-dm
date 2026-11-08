@@ -8,6 +8,7 @@ there; this file is only an index.
 
 | Version | Date | In short |
 |---|---|---|
+| [0.7.0](https://hemang-doshi.github.io/ig-comment-dm/docs/changelog/#v0-7-0) | 2026-11-08 | Set it up by pasting the repo link into your AI agent: `npm run setup:agent`, a private local page for your Meta values, and Meta's webhook set up through the API. |
 | [0.6.0](https://hemang-doshi.github.io/ig-comment-dm/docs/changelog/#v0-6-0) | 2026-11-08 | Meta Unified login for new apps, the dashboard app with exact reasons for every DM that didn't go, and a queue that waits out Meta's hourly limit without giving up. Migration 012. |
 | [0.5.0](https://hemang-doshi.github.io/ig-comment-dm/docs/changelog/#v0-5-0) | 2026-10-27 | A Logs page (thanks @ranita872), DMs past 12 a minute per account wait in a queue, refusals for now are retried, and the poll reaches every post your rules cover. Migrations 010 and 011, and the cron runs every minute. |
 | [0.4.0](https://hemang-doshi.github.io/ig-comment-dm/docs/changelog/#v0-4-0) | 2026-10-27 | Each DM and public reply is sent once, logout ends every session, and extra public replies from other matching rules. Logs you out once. |

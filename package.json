@@ -1,9 +1,10 @@
 {
   "name": "ig-comment-dm",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "setup": "node --experimental-strip-types scripts/setup.ts",
+    "setup:agent": "node --experimental-strip-types scripts/setup.ts --agent",
     "doctor": "node --experimental-strip-types scripts/doctor.ts",
     "update": "node --experimental-strip-types scripts/update.ts",
     "dev": "wrangler dev --port 8787",

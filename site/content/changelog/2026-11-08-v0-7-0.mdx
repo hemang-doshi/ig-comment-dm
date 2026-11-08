@@ -1,0 +1,25 @@
+---
+title: Set it up with your AI agent
+date: 2026-11-08
+version: 0.7.0
+---
+
+You can now give this repo's link to an AI agent and it sets everything up. You only log in, click Allow, and paste three values from Meta into a private page on your own computer.
+
+<Warning>
+**Upgrading from 0.6.0**
+
+Nothing to do for a running copy. `npm run update` brings in the new setup tooling. Your secrets and data don't change.
+</Warning>
+
+### Added
+
+- [`SETUP-WITH-AI.md`](https://github.com/hemang-doshi/ig-comment-dm/blob/master/SETUP-WITH-AI.md), a playbook any agent (Claude Code, Codex, Cursor, Gemini CLI) follows, from the repo link to a first DM. It explains each step to a non-technical person and says exactly where to stop for them.
+- `npm run setup:agent`, the agent-run version of setup:
+  - It runs `wrangler login` itself if needed.
+  - It never prints a secret, and never reads one from the terminal.
+  - It prints `ACTION REQUIRED`, `WAITING` and a final `SETUP_RESULT` JSON line for the agent, listing what's left to do.
+- A private setup page, served on `127.0.0.1` at a random path and opened in your browser.
+  - You paste your Meta values there, and they go straight to `wrangler secret put`.
+  - It shows progress, then your dashboard link with Copy and Open buttons.
+- Setup now subscribes a Unified login app to Instagram comment webhooks through Meta's API, so there's no webhook screen to fill in and no verify token to paste. It also fills in the app's privacy policy and terms URLs where Meta allows it.

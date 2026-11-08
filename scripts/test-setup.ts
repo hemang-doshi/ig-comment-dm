@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { after, before, describe, it } from 'node:test';
+import { startSetupForm, validate } from './setup-form.ts';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   WRANGLER_MISSING,
@@ -166,7 +168,7 @@ describe('npm run setup and npm run doctor, with a fake Wrangler and no npx on P
 
   const copy = (root: string, withWrangler: boolean): void => {
     mkdirSync(join(root, 'scripts'), { recursive: true });
-    for (const name of ['setup.ts', 'doctor.ts', 'wrangler.ts']) copyFileSync(join(SCRIPTS, name), join(root, 'scripts', name));
+    for (const name of ['setup.ts', 'setup-form.ts', 'doctor.ts', 'wrangler.ts']) copyFileSync(join(SCRIPTS, name), join(root, 'scripts', name));
     writeFileSync(join(root, 'package.json'), '{ "name": "fixture", "private": true, "type": "module" }\n');
     if (!withWrangler) return;
     const pkg = join(root, 'node_modules', 'wrangler');
@@ -297,11 +299,169 @@ describe('npm run setup and npm run doctor, with a fake Wrangler and no npx on P
     assert.ok(second.out.includes(`${URL_BASE}/a/${now.ADMIN_URL_SECRET}`));
   });
 
+  // Runs setup --agent the way an agent would, and plays the person on the private page.
+  const runAgent = (
+    script: string,
+    graph: string,
+    person: (url: string) => Promise<void>,
+    onLine?: (line: string, all: string) => Promise<void> | void,
+  ): Promise<{ code: number; out: string }> =>
+    new Promise((done) => {
+      const inherited = Object.entries(process.env).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string' && !/^path$/i.test(entry[0]),
+      );
+      const child = spawn(process.execPath, ['--experimental-strip-types', join(root, 'scripts', script), '--agent'], {
+        cwd: root,
+        env: {
+          ...Object.fromEntries(inherited),
+          PATH: join(dir, 'nothing-here'),
+          FAKE_WRANGLER_STATE: stateFile,
+          SETUP_NO_BROWSER: '1',
+          SETUP_GRAPH_URL: graph,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let out = '';
+      let started = false;
+      const onData = (d: Buffer): void => {
+        out += String(d);
+        const m = plain(out).match(/setup page opened in the browser: (http:\/\/127\.0\.0\.1:\d+\/[0-9a-f]+)/);
+        if (m && !started) {
+          started = true;
+          void person(m[1]);
+        }
+        void onLine?.(String(d), plain(out));
+      };
+      child.stdout.on('data', onData);
+      child.stderr.on('data', onData);
+      child.on('close', (code) => done({ code: code ?? 1, out: plain(out) }));
+    });
+
+  const fakeGraph = async (): Promise<{ url: string; calls: string[]; close: () => void }> => {
+    const calls: string[] = [];
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (c: Buffer) => (body += String(c)));
+      req.on('end', () => {
+        calls.push(`${req.method} ${req.url} ${body}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('{"success":true}');
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const addr = server.address();
+    const port = typeof addr === 'object' && addr ? addr.port : 0;
+    return { url: `http://127.0.0.1:${port}/v23.0`, calls, close: () => server.close() };
+  };
+
+  it('setup --agent takes the Meta values from the private page and never prints a secret', async () => {
+    reset([]);
+    const graph = await fakeGraph();
+    const APP_SECRET = 'ab'.repeat(16);
+    let pageUrl = '';
+    let acked = false;
+    const res = await runAgent(
+      'setup.ts',
+      graph.url,
+      async (url) => {
+        pageUrl = url;
+        // Nothing secret is on the page before the person submits.
+        const before = (await (await fetch(`${url}/state`)).json()) as { phase: string; adminUrl?: string };
+        assert.equal(before.phase, 'form');
+        assert.equal(before.adminUrl, undefined);
+        assert.equal((await fetch(url.replace(/\/[0-9a-f]+$/, '/nope'))).status, 404);
+        const bad = await fetch(`${url}/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"mode":"unified","configId":"1"}' });
+        assert.equal(bad.status, 422);
+        const form = await fetch(`${url}/submit`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' });
+        assert.equal(form.status, 415, 'a cross-site form post is refused');
+        const good = await fetch(`${url}/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'unified', configId: '1234567890', appId: '987654321', appSecret: APP_SECRET }),
+        });
+        assert.equal(good.status, 200);
+      },
+      async (_line, all) => {
+        if (!acked && all.includes('WAITING for them to click Done')) {
+          acked = true;
+          const st = (await (await fetch(`${pageUrl}/state`)).json()) as { phase: string; adminUrl?: string; webhookAutomatic?: boolean };
+          assert.equal(st.phase, 'secrets');
+          assert.match(st.adminUrl ?? '', /^https:\/\/ig-comment-dm\.someone\.workers\.dev\/a\/[0-9a-f]{32}$/);
+          assert.equal(st.webhookAutomatic, true);
+          await fetch(`${pageUrl}/ack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        }
+      },
+    );
+    graph.close();
+    assert.equal(res.code, 0, res.out);
+    const secrets = state().secrets;
+    assert.equal(secrets.META_LOGIN_CONFIG_ID, '1234567890');
+    assert.equal(secrets.META_APP_ID, '987654321');
+    assert.equal(secrets.META_APP_SECRET, APP_SECRET);
+    assert.equal(secrets.FACEBOOK_APP_SECRET, APP_SECRET, 'Unified login signs webhooks with the same App secret');
+    for (const name of ['ADMIN_URL_SECRET', 'WEBHOOK_VERIFY_TOKEN', 'TOKEN_ENCRYPTION_KEY', 'SESSION_SIGNING_KEY', 'META_APP_SECRET']) {
+      assert.ok(!res.out.includes(secrets[name]), `${name} reached the agent's terminal`);
+    }
+    const result = JSON.parse(res.out.match(/SETUP_RESULT (\{.*\})/)?.[1] ?? '{}') as { ok: boolean; webhook: string; login: string; remaining: string[] };
+    assert.equal(result.ok, true);
+    assert.equal(result.login, 'unified');
+    assert.equal(result.webhook, 'configured');
+    assert.ok(result.remaining.some((r) => r.includes('Valid OAuth Redirect URIs')));
+    const sub = graph.calls.find((c) => c.includes('/v23.0/987654321/subscriptions'));
+    assert.ok(sub, graph.calls.join('\n'));
+    assert.match(sub, /object=instagram/);
+    assert.match(sub, /fields=comments/);
+    assert.ok(sub.includes(`verify_token=${secrets.WEBHOOK_VERIFY_TOKEN}`));
+  });
+
+  it('setup --agent on a copy that is already set up asks for nothing and waits for no one', async () => {
+    reset(ALL_SECRETS);
+    const res = await runAgent('setup.ts', 'http://127.0.0.1:9/v23.0', async () => undefined);
+    assert.equal(res.code, 0, res.out);
+    assert.doesNotMatch(res.out, /WAITING for them to click Done/);
+    assert.match(res.out, /SETUP_RESULT \{"ok":true/);
+    assert.deepEqual(Object.keys(state().secrets).sort(), [...ALL_SECRETS].sort());
+  });
+
   it('setup keeps values a copy set up elsewhere already has', () => {
     reset(ALL_SECRETS);
     const res = run(root, 'setup.ts');
     assert.equal(res.code, 0, res.out);
     assert.equal(state().secrets.ADMIN_URL_SECRET, 'existing-ADMIN_URL_SECRET');
     assert.doesNotMatch(res.out, /Save these now/);
+  });
+});
+
+describe('the private setup page', () => {
+  const ALL = { mode: true, configId: true, appId: true, appSecret: true, facebookAppSecret: true };
+
+  it('checks each value before anything reaches Cloudflare', () => {
+    assert.equal(typeof validate({ mode: 'unified', configId: 'abc', appId: '123456', appSecret: 'ab'.repeat(16) }, ALL), 'string');
+    assert.equal(typeof validate({ mode: 'unified', configId: '1234567', appId: '123456', appSecret: 'short' }, ALL), 'string');
+    assert.equal(typeof validate({ mode: 'instagram', appId: '123456', appSecret: 'ab'.repeat(16), facebookAppSecret: '' }, ALL), 'string');
+    assert.deepEqual(validate({ mode: 'unified', configId: ' 1234567 ', appId: '123456', appSecret: 'AB'.repeat(16) }, ALL), {
+      mode: 'unified',
+      configId: '1234567',
+      appId: '123456',
+      appSecret: 'AB'.repeat(16),
+      facebookAppSecret: '',
+    });
+  });
+
+  it('answers only on its random path, and only to a loopback Host', async () => {
+    const form = await startSetupForm({ ask: ALL });
+    try {
+      const { origin, pathname } = new URL(form.url);
+      assert.match(pathname, /^\/[0-9a-f]{32}$/);
+      assert.equal((await fetch(`${origin}/`)).status, 404);
+      assert.equal((await fetch(form.url)).status, 200);
+      const page = await (await fetch(form.url)).text();
+      assert.match(page, /Paste your Meta app details/);
+      form.update({ adminUrl: 'https://x.workers.dev/a/secret', phase: 'working' });
+      const st = (await (await fetch(`${form.url}/state`)).json()) as { adminUrl?: string };
+      assert.equal(st.adminUrl, undefined, 'the admin link stays off the page until the secrets step');
+    } finally {
+      form.close();
+    }
   });
 });
