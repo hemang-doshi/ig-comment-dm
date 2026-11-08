@@ -1218,6 +1218,50 @@ export async function retryUnsureSend(db: D1Database, commentId: string, now: nu
   return changedRows(result!) > 0;
 }
 
+/**
+ * Instagram allows one private reply per comment, so sending an unconfirmed
+ * ("unsure") DM again can't reach anyone twice: either it goes through, or
+ * Instagram answers "already has a reply", which proves the first try did.
+ * Puts unsure sends at least `minAge` seconds old back in the queue for that
+ * check, at most `maxAttempts` tries in all, and keeps their tries so a
+ * comment that keeps timing out stops eventually. Resolves how many it requeued.
+ */
+export async function recheckUnsureSends(
+  db: D1Database,
+  now: number,
+  opts: { minAge: number; maxAttempts: number; expiresBefore: number; note: string },
+): Promise<number> {
+  const { results } = await db
+    .prepare(
+      `SELECT comment_id, ig_user_id, sent_at FROM sent
+       WHERE dm_status = 'unsure' AND sent_at <= ?1 AND attempts < ?2 AND COALESCE(comment_at, sent_at) > ?3
+       LIMIT 20`,
+    )
+    .bind(now - opts.minAge, opts.maxAttempts, opts.expiresBefore)
+    .all<{ comment_id: string; ig_user_id: string; sent_at: number }>();
+  let n = 0;
+  for (const row of results ?? []) {
+    const [result] = await db.batch([
+      db
+        .prepare(
+          `UPDATE sent SET dm_status = 'retry', next_attempt_at = ?1, sent_at = ?1, error = ?3, reply_status = NULL
+           WHERE comment_id = ?2 AND dm_status = 'unsure'`,
+        )
+        .bind(now, row.comment_id, opts.note),
+      db
+        .prepare(
+          `UPDATE system SET value = json_replace(value,
+             '$.all.failed', MAX(0, json_extract(value, '$.all.failed') - 1),
+             ?1, MAX(0, json_extract(value, ?1) - 1))
+           WHERE key = ?2 AND changes() = 1 AND json_extract(value, '$.cutoff') > ?3`,
+        )
+        .bind(`$.accounts."${row.ig_user_id}".failed`, TOTALS_SNAPSHOT_KEY, row.sent_at),
+    ]);
+    n += changedRows(result!);
+  }
+  return n;
+}
+
 /** What Home's Sending card shows for one account. */
 export type QueueOverview = {
   ig_user_id: string;

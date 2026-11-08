@@ -71,7 +71,7 @@ describe('the dashboard API', () => {
 
     const { browser } = await session();
     const res = await api(browser, '/activity');
-    const items = res.json.items as Array<{ commentId: string; status: string; commentText: string | null; outcome: { title: string; reason: string } }>;
+    const items = res.json.items as Array<{ commentId: string; status: string; commentText: string | null; outcome: { title: string; reason: string; label: string } }>;
     const byId = new Map(items.map((i) => [i.commentId, i]));
     expect(byId.get('answered-before')?.outcome.title).toMatch(/Already answered/);
     expect(byId.get('answered-before')?.outcome.reason).toMatch(/one private reply|Business Suite/);

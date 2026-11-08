@@ -4,6 +4,7 @@ import {
   RECONNECT_WARN_SECONDS,
   decryptAesGcm,
   encryptAesGcm,
+  QUEUE_EXPIRY_SECONDS,
   nowSeconds,
 } from './crypto.ts';
 import {
@@ -16,6 +17,7 @@ import {
   listAccounts,
   pruneWebhookEvents,
   readTotalsSnapshot,
+  recheckUnsureSends,
   sendTotals,
   sendTotalsByAccount,
   systemSet,
@@ -23,7 +25,7 @@ import {
   writeTotalsSnapshot,
 } from './db.ts';
 import { refreshLongLived, subscribeCommentWebhooks } from './meta.ts';
-import { drainQueue, minuteOf } from './queue.ts';
+import { RECHECK_NOTE, drainQueue, minuteOf } from './queue.ts';
 import { reconcileComments } from './reconcile.ts';
 import { Subrequests } from './subrequests.ts';
 import type { Env } from './types.ts';
@@ -48,6 +50,17 @@ export async function runMinute(env: Env, scheduledMs: number): Promise<void> {
     } catch (err) {
       console.error('comment poll failed', err instanceof Error ? err.message : err);
     }
+  }
+  try {
+    const now = Math.floor(scheduledMs / 1000);
+    await recheckUnsureSends(env.DB, now, {
+      minAge: 10 * 60,
+      maxAttempts: 3,
+      expiresBefore: now - QUEUE_EXPIRY_SECONDS,
+      note: RECHECK_NOTE,
+    });
+  } catch (err) {
+    console.error('unsure recheck failed', err instanceof Error ? err.message : err);
   }
   await drainQueue(env, subrequests);
 }

@@ -63,6 +63,14 @@ export const EXPIRED_ERROR =
   'Expired: the DM was still waiting its turn when the comment neared Instagram’s 7-day limit for private replies.';
 export const LEASE_ERROR =
   "DM: the Worker stopped before this send finished, so it may have been delivered. It wasn't sent again, so it can't arrive twice.";
+export const CONFIRMED_EARLIER_NOTE =
+  'Delivered: an earlier try timed out, and Instagram later confirmed that comment already had our reply.';
+export const RECHECK_NOTE = 'Checking an unconfirmed DM: Instagram allows one reply per comment, so this can’t send twice.';
+
+function alreadyAnswered(body: string): boolean {
+  return /"error_subcode":\s*2534023|already has a reply/i.test(body);
+}
+
 export const RATE_WAIT_NOTE = 'Waiting out an Instagram rate limit: this isn’t counted against the comment’s tries.';
 export const TOKEN_WAIT_NOTE = 'Waiting for Instagram to be reconnected: the access token stopped working.';
 export const RULE_DELETED_ERROR = 'Skipped: the rule was deleted before its DM went out.';
@@ -307,11 +315,15 @@ async function deliver(db: D1Database, token: string, row: ClaimedSend, deadline
     gaveUp = refusal !== 'final';
   }
 
-  const dmSent = dm.outcome === 'sent';
+  // A comment we already tried once, that Instagram now says "already has a
+  // reply": our earlier, unconfirmed try got through.
+  const confirmedEarlier = row.attempts > 0 && dm.outcome === 'refused' && alreadyAnswered(dm.body);
+  const dmSent = dm.outcome === 'sent' || confirmedEarlier;
   let replyStatus: string | null = null;
   const errors: string[] = [];
   if (gaveUp) errors.push(`DM: Instagram turned it down ${MAX_ATTEMPTS} times, so it was given up on.`);
   if (!dmSent) errors.push(sendError('DM', dm));
+  if (confirmedEarlier) errors.push(CONFIRMED_EARLIER_NOTE);
 
   if (publicText) {
     if (dmSent && !hasTimeForCall(deadline)) {

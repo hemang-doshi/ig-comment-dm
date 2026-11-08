@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, it, vi } from 'vitest';
 import { readTotalsSnapshot, retryUnsureSend } from '../src/db.ts';
-import { MAX_ATTEMPTS, PAUSE_SECONDS, RATE_WAIT_NOTE, TOKEN_WAIT_NOTE } from '../src/queue.ts';
+import { CONFIRMED_EARLIER_NOTE, MAX_ATTEMPTS, PAUSE_SECONDS, RATE_WAIT_NOTE, TOKEN_WAIT_NOTE } from '../src/queue.ts';
 import { type MetaReply, meta } from './support/meta.ts';
 import { FROZEN_NOW_MS, IG_USER, NOW, accountRow, seedAccount, seedQueued, seedRule, sentRow } from './support/seed.ts';
 import { MINUTE_CRON, adminPath, commentPayload, postWebhook, runScheduled, signedInAdmin } from './support/worker.ts';
@@ -196,12 +196,31 @@ describe('a DM Instagram never confirmed', () => {
     meta.on('POST', '/:id/messages', { json: { recipient_id: '1', message_id: 'm' } });
   }
 
-  it('is never sent again by itself', async () => {
+  it('is checked again after 10 minutes, and counts as delivered when Instagram says the comment already has our reply', async () => {
     await unsureFromWebhook();
     expect(await sentRow('c1')).toMatchObject({ dm_status: 'unsure', attempts: 1 });
-    at(60 * 60);
+    at(5 * 60);
     await runScheduled(MINUTE_CRON);
     expect(dmCalls()).toHaveLength(1);
+
+    meta.on('POST', '/:id/messages', refusal(400, -1, 2534023));
+    at(11 * 60);
+    await runScheduled(MINUTE_CRON);
+    expect(dmCalls()).toHaveLength(2);
+    const row = await sentRow('c1');
+    expect(row).toMatchObject({ dm_status: 'ok', reply_status: 'ok', attempts: 2 });
+    expect(row?.error).toContain(CONFIRMED_EARLIER_NOTE);
+  });
+
+  it('stops re-checking a DM that keeps timing out after three tries in all', async () => {
+    await unsureFromWebhook();
+    meta.on('POST', '/:id/messages', { status: 503, json: {} });
+    for (let i = 1; i <= 6; i++) {
+      at(i * 11 * 60);
+      await runScheduled(MINUTE_CRON);
+    }
+    expect(dmCalls()).toHaveLength(3);
+    expect(await sentRow('c1')).toMatchObject({ dm_status: 'unsure', attempts: 3 });
   });
 
   it('shows on Home as possibly delivered, and Send again queues it once', async () => {

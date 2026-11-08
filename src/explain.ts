@@ -152,6 +152,18 @@ export function explainSend(s: SentLike, opts: { pausedUntil?: number; now?: num
 
   switch (s.dm_status) {
     case 'ok': {
+      if (/earlier try timed out/i.test(err)) {
+        return {
+          label: 'Sent',
+          tone: 'success',
+          title: 'Guide delivered (confirmed on re-check)',
+          reason:
+            'The first try timed out, so the bot checked again. Instagram answered that this comment already had our reply, which proves the first DM got through.',
+          action: null,
+          retryable: false,
+          code: null,
+        };
+      }
       if (replyFailed) {
         const why = /no time was left|slow to answer/i.test(replyErr)
           ? 'Instagram was slow to answer, so the bot skipped the public reply rather than risk the DM.'
@@ -177,6 +189,18 @@ export function explainSend(s: SentLike, opts: { pausedUntil?: number; now?: num
       };
     }
     case 'queued':
+      if (/rate limit/i.test(err)) {
+        const at = s.next_attempt_at ? new Date(s.next_attempt_at * 1000).toISOString() : null;
+        return {
+          label: 'Queued',
+          tone: 'pending',
+          title: 'Waiting out Meta’s hourly limit',
+          reason: `Meta paused the app for a few minutes because its hourly API allowance ran out (mostly slow responses from Instagram). This doesn’t use up the comment’s tries.${at ? ` Next try: ${at}.` : ''}`,
+          action: 'Nothing to do — it goes out automatically.',
+          retryable: false,
+          code: '4',
+        };
+      }
       return {
         label: 'Queued',
         tone: 'pending',
@@ -197,6 +221,18 @@ export function explainSend(s: SentLike, opts: { pausedUntil?: number; now?: num
         code: null,
       };
     case 'retry': {
+      if (/Checking an unconfirmed DM/i.test(err)) {
+        return {
+          label: 'Re-checking',
+          tone: 'pending',
+          title: 'Checking whether an unconfirmed DM arrived',
+          reason:
+            'Instagram didn’t confirm an earlier try. The bot is asking again; since Instagram allows one reply per comment, this can’t send the guide twice.',
+          action: null,
+          retryable: false,
+          code: null,
+        };
+      }
       const ex = explainMetaRefusal(err.replace(/^DM:\s*/i, ''));
       const at = s.next_attempt_at ? new Date(s.next_attempt_at * 1000).toISOString() : null;
       return {
@@ -215,8 +251,8 @@ export function explainSend(s: SentLike, opts: { pausedUntil?: number; now?: num
         tone: 'warning',
         title: 'Instagram didn’t confirm — the DM may have been delivered',
         reason:
-          'Instagram didn’t answer within 10 seconds. It often delivers anyway, so the bot didn’t resend on its own (a second DM to the same comment is refused, and looks spammy).',
-        action: 'Check your sent DMs. If it isn’t there, press Send again.',
+          'Instagram didn’t answer in time. It often delivers anyway. The bot re-checks unconfirmed DMs automatically (up to 3 tries) — Instagram allows one reply per comment, so a re-check can’t message anyone twice.',
+        action: 'Nothing to do; it re-checks on its own. Send again forces a check now.',
         retryable: true,
         code: null,
       };
